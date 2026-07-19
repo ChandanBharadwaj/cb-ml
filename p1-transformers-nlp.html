@@ -1,0 +1,504 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Transformers &amp; NLP · cb-ml</title>
+  <meta name="description" content="Tokenization, embeddings, positional encoding (RoPE), and self-attention derived step by step — the table-stakes interview topic, with animated diagrams and commented code.">
+  <script>(function(){try{var t=localStorage.getItem('cbml-theme');if(t)document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+  <link rel="stylesheet" href="assets/styles.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+  <script defer src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+  <script defer src="assets/app.js"></script>
+</head>
+<body>
+  <a class="skip" href="#main">Skip to content</a>
+
+  <header class="topbar">
+    <button id="menuBtn" class="iconbtn" aria-label="Open navigation" aria-expanded="false">☰</button>
+    <a class="topbar__brand" href="index.html"><span class="logo">ml</span> cb-ml</a>
+    <span class="topbar__spacer"></span>
+    <button id="themeBtn" class="iconbtn" aria-label="Toggle theme">☾</button>
+  </header>
+
+  <aside id="drawer" class="drawer" aria-label="Site navigation">
+    <div class="drawer__head">
+      <span class="logo">ml</span>
+      <div><div class="drawer__title">cb-ml</div><div class="drawer__sub">AI/ML · GenAI interview prep</div></div>
+    </div>
+    <nav id="drawerNav"></nav>
+  </aside>
+  <div id="scrim" class="scrim"></div>
+
+  <main id="main">
+    <span class="eyebrow">Part 1 · Foundations</span>
+    <h1>Transformers &amp; NLP</h1>
+    <p class="lede">
+      The architecture behind every modern LLM. If an interviewer goes deep on one thing, it is
+      attention — so this page derives it from scratch. By the end you can explain
+      <em>why</em> transformers replaced RNNs, draw self-attention, and defend the design choices.
+    </p>
+
+    <div class="callout ladder">
+      <div class="callout__title">Where this sits on the ladder</div>
+      Transformers are rung 3–4. They shine on <strong>sequence / language</strong> data where
+      order and long-range context matter and hand-written rules or tabular classical ML can’t
+      capture meaning. They are <em>not</em> the answer for a 10-column spreadsheet — that’s still
+      gradient-boosted trees on a CPU.
+      <div class="chips">
+        <span class="chip gpu">GPU for training</span>
+        <span class="chip cost">$$–$/token</span>
+        <span class="chip">unstructured text / sequences</span>
+      </div>
+    </div>
+
+    <!-- ===== TOC ===== -->
+    <nav class="toc" aria-label="On this page">
+      <div class="toc__title">On this page</div>
+      <ol>
+        <li><a href="#why">Why transformers replaced RNNs</a></li>
+        <li><a href="#tokenization">Tokenization (BPE)</a></li>
+        <li><a href="#embeddings">Embeddings &amp; positional encoding</a></li>
+        <li><a href="#attention">Self-attention, derived</a></li>
+        <li><a href="#multihead">Multi-head attention</a></li>
+        <li><a href="#block">The transformer block</a></li>
+        <li><a href="#variants">Encoder vs decoder vs enc-dec</a></li>
+        <li><a href="#qa">Interview Q&amp;A</a></li>
+        <li><a href="#code">Code: attention from scratch</a></li>
+      </ol>
+    </nav>
+
+    <!-- ===== Why ===== -->
+    <h2 id="why">Why transformers replaced RNNs</h2>
+    <p>
+      RNNs/LSTMs read a sequence <strong>one token at a time</strong>, carrying a hidden state
+      forward. Two problems: (1) they can’t parallelize across the sequence — token <code>t</code>
+      needs token <code>t-1</code>’s state, so training is slow; (2) long-range dependencies fade
+      as the signal is squeezed through many steps (vanishing gradients).
+    </p>
+    <p>
+      The 2017 paper <em>“Attention Is All You Need”</em> threw out recurrence. Every token looks at
+      <strong>every other token directly</strong>, in parallel, through <em>self-attention</em>.
+      That single change unlocked GPU-parallel training on internet-scale data — which is what made
+      LLMs possible.
+    </p>
+    <div class="callout deeper">
+      <div class="callout__title">One-line answer</div>
+      “Transformers replace sequential recurrence with parallel self-attention, so every token can
+      attend to every other token in O(1) path length — enabling long-range context and massively
+      parallel training.”
+    </div>
+
+    <!-- ===== Tokenization ===== -->
+    <h2 id="tokenization">Tokenization (BPE)</h2>
+    <p>
+      Models don’t see text; they see integer <strong>token IDs</strong>. Modern LLMs use
+      <strong>subword</strong> tokenization (Byte-Pair Encoding / WordPiece / SentencePiece): common
+      words become a single token, rare words split into reusable pieces. This keeps the vocabulary
+      small (~30k–100k) while still representing any string — including typos and new words.
+    </p>
+
+    <div class="figure">
+      <svg viewBox="0 0 460 130" role="img" aria-label="The word 'tokenization' splitting into subword tokens">
+        <text x="30" y="34" fill="var(--text,#e6edf3)" font-size="15" font-family="monospace">"tokenization is fun"</text>
+        <!-- animated subword chips appearing -->
+        <g font-family="monospace" font-size="13" font-weight="700">
+          <g style="animation:fadeSlide .5s ease both;">
+            <rect x="30"  y="60" width="52" height="30" rx="7" fill="var(--accent-soft,#2b2f55)" stroke="#7c8cff"/>
+            <text x="56"  y="80" text-anchor="middle" fill="#7c8cff">token</text>
+          </g>
+          <g style="animation:fadeSlide .5s ease .15s both;">
+            <rect x="90"  y="60" width="42" height="30" rx="7" fill="var(--accent-soft,#2b2f55)" stroke="#7c8cff"/>
+            <text x="111" y="80" text-anchor="middle" fill="#7c8cff">iza</text>
+          </g>
+          <g style="animation:fadeSlide .5s ease .3s both;">
+            <rect x="140" y="60" width="46" height="30" rx="7" fill="var(--accent-soft,#2b2f55)" stroke="#7c8cff"/>
+            <text x="163" y="80" text-anchor="middle" fill="#7c8cff">tion</text>
+          </g>
+          <g style="animation:fadeSlide .5s ease .45s both;">
+            <rect x="194" y="60" width="30" height="30" rx="7" fill="var(--surface-2,#1c2333)" stroke="#38bdf8"/>
+            <text x="209" y="80" text-anchor="middle" fill="#38bdf8">is</text>
+          </g>
+          <g style="animation:fadeSlide .5s ease .6s both;">
+            <rect x="232" y="60" width="40" height="30" rx="7" fill="var(--surface-2,#1c2333)" stroke="#38bdf8"/>
+            <text x="252" y="80" text-anchor="middle" fill="#38bdf8">fun</text>
+          </g>
+        </g>
+        <text x="30" y="115" fill="var(--text-muted,#9aa7b8)" font-size="11" font-family="monospace">→ IDs: [3078, 2634, 4575, 318, 1257]</text>
+      </svg>
+      <div class="figure__cap">“tokenization” is rare, so it splits into <code>token</code>+<code>iza</code>+<code>tion</code>; common words stay whole. Each token maps to an integer ID.</div>
+    </div>
+
+    <div class="callout warn">
+      <div class="callout__title">FDE gotcha</div>
+      Tokens ≠ words. English averages ~1.3 tokens/word; code and non-Latin scripts cost more. Since
+      you pay <strong>per token</strong> and context windows are measured in tokens, a “4k word”
+      document can blow a budget. Always estimate tokens, not words.
+    </div>
+
+    <!-- ===== Embeddings ===== -->
+    <h2 id="embeddings">Embeddings &amp; positional encoding</h2>
+    <p>
+      Each token ID indexes into an <strong>embedding table</strong> — a learned vector (e.g. 768–4096
+      dims) that places the token in a semantic space where similar meanings sit close together.
+      But attention is <em>permutation-invariant</em>: on its own it can’t tell “dog bites man” from
+      “man bites dog.” So we inject <strong>position</strong>.
+    </p>
+    <p>
+      The original transformer added fixed <strong>sinusoidal</strong> position signals. Modern LLMs
+      (LLaMA, GPT-NeoX, most 2023+) use <strong>RoPE</strong> (Rotary Position Embedding), which
+      <em>rotates</em> the query/key vectors by an angle proportional to position — so attention
+      naturally depends on <em>relative</em> distance and extrapolates to longer contexts.
+    </p>
+
+    <div class="figure">
+      <svg viewBox="0 0 460 150" role="img" aria-label="Sinusoidal positional encoding: sine waves of different frequencies">
+        <line x1="20" y1="75" x2="440" y2="75" stroke="var(--border,#2a3140)" stroke-width="1"/>
+        <!-- three sinusoids of decreasing frequency = different embedding dimensions -->
+        <path d="M20,75 Q40,20 60,75 T100,75 T140,75 T180,75 T220,75 T260,75 T300,75 T340,75 T380,75 T420,75"
+              fill="none" stroke="#7c8cff" stroke-width="2" class="anim-float"/>
+        <path d="M20,75 Q55,30 90,75 T160,75 T230,75 T300,75 T370,75 T440,75"
+              fill="none" stroke="#38bdf8" stroke-width="2" opacity="0.8"/>
+        <path d="M20,75 Q90,40 160,75 T300,75 T440,75"
+              fill="none" stroke="#3fb950" stroke-width="2" opacity="0.7"/>
+        <text x="20" y="140" fill="var(--text-muted,#9aa7b8)" font-size="11">position →</text>
+        <text x="360" y="140" fill="var(--text-muted,#9aa7b8)" font-size="11">each dim = its own frequency</text>
+      </svg>
+      <div class="figure__cap">Position is encoded as a bank of sinusoids at different frequencies. Every position gets a unique fingerprint; nearby positions get similar ones.</div>
+    </div>
+
+    <!-- ===== Attention ===== -->
+    <h2 id="attention">Self-attention, derived</h2>
+    <p>
+      This is the heart of it. For each token we compute three vectors by multiplying its embedding
+      by learned matrices:
+    </p>
+    <ul>
+      <li><strong>Query (Q)</strong> — “what am I looking for?”</li>
+      <li><strong>Key (K)</strong> — “what do I offer?”</li>
+      <li><strong>Value (V)</strong> — “what I’ll actually pass on if attended to.”</li>
+    </ul>
+    <p>
+      A token’s new representation is a <strong>weighted average of every token’s Value</strong>,
+      where the weight is how well this token’s Query matches that token’s Key. The full formula:
+    </p>
+    <div class="callout">
+      <div class="callout__title">Scaled dot-product attention</div>
+      <div style="font-family:var(--font-mono);font-size:1.05rem;text-align:center;padding:6px 0;">
+        Attention(Q, K, V) = softmax( <b>Q·Kᵀ / √d<sub>k</sub></b> ) · V
+      </div>
+    </div>
+
+    <div class="figure">
+      <svg viewBox="0 0 460 180" role="img" aria-label="Self-attention: the token 'sat' attending to all other tokens with different weights">
+        <!-- tokens on a row -->
+        <g font-family="monospace" font-size="13" text-anchor="middle">
+          <g><rect x="30"  y="120" width="70" height="34" rx="8" fill="var(--surface-2,#1c2333)" stroke="var(--border,#3a4457)"/><text x="65"  y="142" fill="var(--text,#e6edf3)">The</text></g>
+          <g><rect x="120" y="120" width="70" height="34" rx="8" fill="var(--surface-2,#1c2333)" stroke="var(--border,#3a4457)"/><text x="155" y="142" fill="var(--text,#e6edf3)">cat</text></g>
+          <g><rect x="210" y="120" width="70" height="34" rx="8" fill="var(--accent-soft,#2b2f55)" stroke="#7c8cff" stroke-width="2"/><text x="245" y="142" fill="#7c8cff" font-weight="700">sat</text></g>
+          <g><rect x="300" y="120" width="70" height="34" rx="8" fill="var(--surface-2,#1c2333)" stroke="var(--border,#3a4457)"/><text x="335" y="142" fill="var(--text,#e6edf3)">on</text></g>
+          <g><rect x="390" y="120" width="60" height="34" rx="8" fill="var(--surface-2,#1c2333)" stroke="var(--border,#3a4457)"/><text x="420" y="142" fill="var(--text,#e6edf3)">mat</text></g>
+        </g>
+        <!-- attention edges from 'sat' (x=245,y=120) up to a focus point, thickness = weight -->
+        <g fill="none" stroke="#7c8cff" class="anim-flow" stroke-linecap="round">
+          <path d="M245,120 C200,70 90,70 65,120"  stroke-width="1.6" opacity="0.45"/>
+          <path d="M245,120 C210,55 165,60 155,120" stroke-width="4"   opacity="0.9"/>
+          <path d="M245,120 C260,50 330,60 335,120" stroke-width="2.4" opacity="0.65"/>
+          <path d="M245,120 C300,50 400,70 420,120" stroke-width="3.2" opacity="0.75"/>
+        </g>
+        <text x="230" y="30" fill="var(--text-muted,#9aa7b8)" font-size="11" text-anchor="middle">“sat” attends most to “cat” and “mat” (thicker = higher weight)</text>
+      </svg>
+      <div class="figure__cap">Every token builds its meaning from a weighted blend of the others. Here “sat” leans on its subject “cat” and object “mat.”</div>
+    </div>
+
+    <h3>Why divide by √d<sub>k</sub>?</h3>
+    <p>
+      A classic interview follow-up. The dot product <code>Q·Kᵀ</code> sums over <code>d<sub>k</sub></code>
+      dimensions, so its variance grows with <code>d<sub>k</sub></code>. Large values push
+      <code>softmax</code> into saturated regions where gradients vanish and it behaves like a hard
+      <code>argmax</code>. Dividing by <code>√d<sub>k</sub></code> keeps the scores unit-variance, so
+      the softmax stays smooth and trainable.
+    </p>
+
+    <details class="reveal">
+      <summary>Show the causal-mask detail (decoders)</summary>
+      <p>
+        In a <strong>decoder</strong> (GPT-style, generating left-to-right) a token must not see the
+        future. Before the softmax we add a <strong>causal mask</strong> that sets all
+        “future” scores to <code>-∞</code>, so their softmax weight becomes 0. That’s the only
+        difference that makes attention autoregressive.
+      </p>
+    </details>
+
+    <!-- ===== Multi-head ===== -->
+    <h2 id="multihead">Multi-head attention</h2>
+    <p>
+      One attention pattern isn’t enough — a token may need syntactic <em>and</em> semantic
+      relationships at once. So we run attention <strong>h times in parallel</strong> (e.g. 8–96
+      heads), each with its own small Q/K/V projections, then concatenate and project back. Each
+      head can specialize: one tracks subject→verb, another tracks coreference, etc.
+    </p>
+
+    <div class="figure">
+      <svg viewBox="0 0 460 160" role="img" aria-label="Multi-head attention splits into parallel heads then concatenates">
+        <rect x="30" y="66" width="70" height="30" rx="7" fill="var(--surface-2,#1c2333)" stroke="var(--border,#3a4457)"/>
+        <text x="65" y="86" text-anchor="middle" font-size="12" fill="var(--text,#e6edf3)" font-family="monospace">Q,K,V</text>
+        <!-- split arrows -->
+        <g stroke="#38bdf8" fill="none" class="anim-flow"><path d="M100,81 C140,40 150,35 175,40"/><path d="M100,81 L175,81"/><path d="M100,81 C140,120 150,125 175,122"/></g>
+        <!-- heads -->
+        <g font-family="monospace" font-size="11" text-anchor="middle">
+          <rect x="178" y="26" width="80" height="28" rx="7" fill="var(--accent-soft,#2b2f55)" stroke="#7c8cff"/><text x="218" y="45" fill="#7c8cff">head 1</text>
+          <rect x="178" y="67" width="80" height="28" rx="7" fill="var(--accent-soft,#2b2f55)" stroke="#7c8cff"/><text x="218" y="86" fill="#7c8cff">head 2</text>
+          <rect x="178" y="108" width="80" height="28" rx="7" fill="var(--accent-soft,#2b2f55)" stroke="#7c8cff"/><text x="218" y="127" fill="#7c8cff">head h</text>
+        </g>
+        <!-- concat arrows -->
+        <g stroke="#38bdf8" fill="none" class="anim-flow"><path d="M258,40 C300,45 305,70 330,81"/><path d="M258,81 L330,81"/><path d="M258,122 C300,120 305,95 330,81"/></g>
+        <rect x="332" y="66" width="96" height="30" rx="7" fill="var(--surface-2,#1c2333)" stroke="#38bdf8"/>
+        <text x="380" y="86" text-anchor="middle" font-size="11" fill="#38bdf8" font-family="monospace">concat + W_O</text>
+      </svg>
+      <div class="figure__cap">Split into h heads → each attends independently → concatenate → linear projection. Same total compute, far richer representations.</div>
+    </div>
+
+    <!-- ===== Block ===== -->
+    <h2 id="block">The transformer block</h2>
+    <p>
+      A block stacks two sub-layers, each wrapped in a <strong>residual connection</strong> and
+      <strong>layer normalization</strong>: (1) multi-head self-attention, (2) a position-wise
+      feed-forward network (FFN). Stack N of these (GPT-3: 96) and you have the model.
+    </p>
+
+    <div class="figure">
+      <svg viewBox="0 0 300 300" role="img" aria-label="Transformer block: attention and feed-forward sub-layers with residual connections">
+        <defs><marker id="a2" markerWidth="8" markerHeight="8" refX="4" refY="4" orient="auto"><path d="M0,0 L6,4 L0,8 Z" fill="#9aa7b8"/></marker></defs>
+        <g font-family="monospace" font-size="11" text-anchor="middle">
+          <rect x="90" y="256" width="120" height="30" rx="7" fill="var(--surface-2,#1c2333)" stroke="var(--border,#3a4457)"/><text x="150" y="275" fill="var(--text,#e6edf3)">input + pos</text>
+          <line x1="150" y1="256" x2="150" y2="230" stroke="#9aa7b8" marker-end="url(#a2)"/>
+          <rect x="70" y="196" width="160" height="34" rx="8" fill="var(--accent-soft,#2b2f55)" stroke="#7c8cff"/><text x="150" y="217" fill="#7c8cff" font-weight="700">Multi-Head Attention</text>
+          <rect x="90" y="156" width="120" height="26" rx="7" fill="none" stroke="#38bdf8" stroke-dasharray="4 3"/><text x="150" y="173" fill="#38bdf8">Add &amp; Norm</text>
+          <line x1="150" y1="156" x2="150" y2="140" stroke="#9aa7b8" marker-end="url(#a2)"/>
+          <rect x="70" y="104" width="160" height="34" rx="8" fill="var(--accent-soft,#2b2f55)" stroke="#7c8cff"/><text x="150" y="125" fill="#7c8cff" font-weight="700">Feed-Forward</text>
+          <rect x="90" y="64" width="120" height="26" rx="7" fill="none" stroke="#38bdf8" stroke-dasharray="4 3"/><text x="150" y="81" fill="#38bdf8">Add &amp; Norm</text>
+          <line x1="150" y1="64" x2="150" y2="48" stroke="#9aa7b8" marker-end="url(#a2)"/>
+          <rect x="90" y="18" width="120" height="30" rx="7" fill="var(--surface-2,#1c2333)" stroke="var(--border,#3a4457)"/><text x="150" y="37" fill="var(--text,#e6edf3)">to next block</text>
+        </g>
+        <!-- residual skip lines -->
+        <path d="M64,213 C40,213 40,169 86,169" fill="none" stroke="#3fb950" stroke-width="1.5" class="anim-flow"/>
+        <path d="M64,121 C40,121 40,77 86,77" fill="none" stroke="#3fb950" stroke-width="1.5" class="anim-flow"/>
+        <text x="20" y="150" fill="#3fb950" font-size="10" transform="rotate(-90 20 150)" text-anchor="middle">residual</text>
+      </svg>
+      <div class="figure__cap">Residual connections (green) let gradients flow straight through, so you can stack dozens of blocks without the signal degrading.</div>
+    </div>
+
+    <!-- ===== Variants ===== -->
+    <h2 id="variants">Encoder vs decoder vs encoder-decoder</h2>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>Type</th><th>Attention</th><th>Good at</th><th>Examples</th></tr></thead>
+        <tbody>
+          <tr><td><strong>Encoder-only</strong></td><td>Bidirectional (sees full context)</td><td>Understanding: classification, embeddings, retrieval</td><td>BERT, sentence-transformers</td></tr>
+          <tr><td><strong>Decoder-only</strong></td><td>Causal (left-to-right)</td><td>Generation: chat, completion, code</td><td>GPT, LLaMA, Mistral</td></tr>
+          <tr><td><strong>Encoder-decoder</strong></td><td>Encoder bidirectional + decoder cross-attends</td><td>Seq-to-seq: translation, summarization</td><td>T5, BART</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="callout deeper">
+      <div class="callout__title">Rule of thumb</div>
+      Need a <em>vector</em> that represents text (search, RAG, classification)? Reach for an
+      <strong>encoder</strong>. Need to <em>produce</em> text? Reach for a <strong>decoder</strong>.
+      Almost every chat LLM today is decoder-only.
+    </div>
+
+    <!-- ===== Q&A ===== -->
+    <h2 id="qa">Interview Q&amp;A</h2>
+
+    <details class="qa">
+      <summary class="qa__q"><span class="badge core">core</span>Walk me through self-attention.</summary>
+      <div class="qa__a">
+        <p>
+          Project each token embedding into Query, Key and Value vectors. Score every token pair with
+          the dot product of one token’s Query and another’s Key, scale by <code>1/√d<sub>k</sub></code>,
+          softmax the scores into weights, then take the weighted sum of Values. That weighted sum is
+          the token’s new, context-aware representation. It’s done for all tokens at once as matrix
+          multiplications, which is why it’s GPU-friendly.
+        </p>
+      </div>
+    </details>
+
+    <details class="qa">
+      <summary class="qa__q"><span class="badge trap">trap</span>Why the <code>√d<sub>k</sub></code> scaling — what breaks without it?</summary>
+      <div class="qa__a">
+        <p>
+          Without scaling, dot products grow with dimension (variance ∝ <code>d<sub>k</sub></code>).
+          Large logits saturate the softmax → near-zero gradients → the model can’t learn, and
+          attention collapses to a hard pick of one token. Dividing by <code>√d<sub>k</sub></code>
+          normalizes the score variance to ~1, keeping softmax in its sensitive, differentiable range.
+        </p>
+      </div>
+    </details>
+
+    <details class="qa">
+      <summary class="qa__q"><span class="badge core">core</span>What’s the computational complexity of self-attention, and why does it matter?</summary>
+      <div class="qa__a">
+        <p>
+          <code>O(n²·d)</code> in sequence length <code>n</code> — every token attends to every other,
+          so the attention matrix is <code>n×n</code>. That quadratic cost is exactly why long context
+          is expensive and why techniques like <strong>FlashAttention</strong>, sliding-window
+          attention, and <strong>KV-caching</strong> exist. (See the Inference Optimization page.)
+        </p>
+      </div>
+    </details>
+
+    <details class="qa">
+      <summary class="qa__q"><span class="badge senior">senior</span>Why do modern LLMs use RoPE instead of the original sinusoidal encodings?</summary>
+      <div class="qa__a">
+        <p>
+          Sinusoidal/learned <em>absolute</em> encodings are added to the input once. RoPE instead
+          <em>rotates</em> Q and K by an angle tied to position, so the attention score between two
+          tokens depends on their <strong>relative</strong> offset. That generalizes better to
+          positions unseen in training and makes context-length extension (e.g. NTK/YaRN scaling)
+          tractable — which is why almost all 2023+ open models adopted it.
+        </p>
+      </div>
+    </details>
+
+    <details class="qa">
+      <summary class="qa__q"><span class="badge trap">trap</span>If attention is permutation-invariant, how does the model know word order?</summary>
+      <div class="qa__a">
+        <p>
+          It doesn’t — until you add positional information. Attention treats the input as a
+          <em>set</em>. Positional encodings (sinusoidal, learned, or RoPE) are what inject order, so
+          the model can distinguish “dog bites man” from “man bites dog.”
+        </p>
+      </div>
+    </details>
+
+    <details class="qa">
+      <summary class="qa__q"><span class="badge senior">senior</span>Encoder-only vs decoder-only — which would you pick for semantic search, and why?</summary>
+      <div class="qa__a">
+        <p>
+          Encoder-only (e.g. a sentence-transformer). Search needs a single, high-quality
+          <em>embedding</em> per document, and bidirectional attention lets every token see the full
+          context, producing better representations. Decoder-only models are optimized to
+          <em>generate</em> the next token, not to summarize meaning into one vector — though you
+          <em>can</em> pool their hidden states, encoders are usually cheaper and stronger for pure
+          retrieval.
+        </p>
+      </div>
+    </details>
+
+    <!-- ===== Code ===== -->
+    <h2 id="code">Code: attention from scratch, then with Hugging Face</h2>
+    <p>
+      First the mechanics in NumPy — no framework magic, so you can see every step. This is the exact
+      thing an interviewer may ask you to whiteboard.
+    </p>
+
+    <div class="codewrap">
+      <div class="codewrap__bar"><span class="codewrap__lang">python</span><span>scaled dot-product self-attention (NumPy)</span><button class="copybtn" type="button">Copy</button></div>
+<pre><code class="language-python"># Scaled dot-product self-attention, implemented from scratch to show the mechanics.
+# No deep-learning framework — just NumPy — so every step is visible.
+import numpy as np
+
+def softmax(x, axis=-1):
+    # Subtract the max for numerical stability (avoids overflow in exp).
+    x = x - x.max(axis=axis, keepdims=True)
+    e = np.exp(x)
+    return e / e.sum(axis=axis, keepdims=True)
+
+def self_attention(X, W_q, W_k, W_v, causal=False):
+    """
+    X   : (seq_len, d_model)  input token embeddings (one row per token)
+    W_* : (d_model, d_k)      learned projection matrices for Q, K, V
+    Returns: (seq_len, d_k)   context-aware representation for each token
+    """
+    # 1) Project each token into Query, Key, Value spaces.
+    Q = X @ W_q                      # (seq_len, d_k) — "what each token is looking for"
+    K = X @ W_k                      # (seq_len, d_k) — "what each token offers"
+    V = X @ W_v                      # (seq_len, d_k) — "what each token passes on"
+
+    d_k = Q.shape[-1]
+
+    # 2) Score every query against every key: how well do they match?
+    scores = Q @ K.T                 # (seq_len, seq_len)
+
+    # 3) Scale by sqrt(d_k) so the softmax doesn't saturate (the key trick).
+    scores = scores / np.sqrt(d_k)
+
+    # 4) Optional causal mask: a token must not attend to future tokens (decoders).
+    if causal:
+        seq_len = scores.shape[0]
+        # Upper-triangular positions (above the diagonal) are "the future".
+        mask = np.triu(np.ones((seq_len, seq_len)), k=1).astype(bool)
+        scores[mask] = -np.inf       # -inf -> softmax weight becomes exactly 0
+
+    # 5) Turn scores into probabilities (each row sums to 1).
+    weights = softmax(scores, axis=-1)   # (seq_len, seq_len)
+
+    # 6) Weighted sum of Values = the new representation of each token.
+    return weights @ V, weights          # output (seq_len, d_k), plus weights to inspect
+
+# --- tiny demo ---------------------------------------------------------------
+np.random.seed(0)
+X = np.random.randn(4, 8)            # 4 tokens, 8-dim embeddings
+Wq, Wk, Wv = (np.random.randn(8, 8) for _ in range(3))
+out, attn = self_attention(X, Wq, Wk, Wv, causal=True)
+print("output shape:", out.shape)   # (4, 8)
+print("attention row 0 (sums to 1):", attn[0].round(3))
+</code></pre>
+    </div>
+
+    <p>
+      In practice you never hand-roll this — you use a library. Here’s the same idea at the level you
+      actually work at, plus getting real embeddings out of a pretrained model:
+    </p>
+
+    <div class="codewrap">
+      <div class="codewrap__bar"><span class="codewrap__lang">python</span><span>tokenizer + embeddings with Hugging Face</span><button class="copybtn" type="button">Copy</button></div>
+<pre><code class="language-python"># The real-world version: tokenize text and pull embeddings from a pretrained model.
+# pip install transformers torch
+from transformers import AutoTokenizer, AutoModel
+import torch
+
+model_name = "sentence-transformers/all-MiniLM-L6-v2"   # a small encoder — CPU-friendly
+tokenizer = AutoTokenizer.from_pretrained(model_name)
+model = AutoModel.from_pretrained(model_name)
+
+sentences = ["The cat sat on the mat.", "A feline rested on a rug."]
+
+# 1) Tokenize: text -> token IDs (+ attention mask for padding).
+enc = tokenizer(sentences, padding=True, truncation=True, return_tensors="pt")
+print("token IDs:\n", enc["input_ids"])
+
+# 2) Forward pass through the transformer (no gradients needed for inference).
+with torch.no_grad():
+    out = model(**enc)                       # last_hidden_state: (batch, seq_len, hidden)
+
+# 3) Mean-pool token vectors into one sentence embedding (mask out padding).
+mask = enc["attention_mask"].unsqueeze(-1)   # (batch, seq_len, 1)
+summed = (out.last_hidden_state * mask).sum(1)
+counts = mask.sum(1).clamp(min=1e-9)
+embeddings = summed / counts                 # (batch, hidden) — one vector per sentence
+
+# 4) Cosine similarity: the two paraphrases should score high despite different words.
+a, b = torch.nn.functional.normalize(embeddings, dim=1)
+print("cosine similarity:", float(a @ b))    # ~0.7+ — semantic match, not word overlap
+</code></pre>
+    </div>
+
+    <div class="callout">
+      <div class="callout__title">Connect it to what you know</div>
+      That sentence embedding is just a feature vector — the same thing you’d compute in a Spark/
+      Databricks pipeline, except the “feature engineering” is a transformer. Store those vectors in a
+      vector DB and you have semantic search (see <a href="p2-vector-db-embeddings.html">Vector DBs &amp; Embeddings</a>).
+    </div>
+
+    <!-- ===== Prev/Next ===== -->
+    <nav class="pagenav" aria-label="Page navigation">
+      <a class="prev" href="p1-ml-deep-learning.html"><div class="dir">← Previous</div><div class="ttl">ML &amp; Deep Learning</div></a>
+      <a class="next" href="p1-genai-llm-slm.html"><div class="dir">Next →</div><div class="ttl">GenAI · LLM · SLM</div></a>
+    </nav>
+
+    <div class="sitefoot">cb-ml · Part 1 · Foundations &amp; Concepts</div>
+  </main>
+</body>
+</html>

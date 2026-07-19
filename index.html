@@ -1,0 +1,191 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>cb-ml · Modern AI/ML &amp; GenAI Interview Prep</title>
+  <meta name="description" content="A hands-on, mobile-friendly field guide to modern AI/ML and GenAI for interviews and building — organized around the 'cheapest tool that works' escalation ladder.">
+  <!-- No-flash theme: apply saved theme before first paint -->
+  <script>(function(){try{var t=localStorage.getItem('cbml-theme');if(t)document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+  <link rel="stylesheet" href="assets/styles.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+  <script defer src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+  <script defer src="assets/app.js"></script>
+</head>
+<body>
+  <a class="skip" href="#main">Skip to content</a>
+
+  <!-- ===== Top bar ===== -->
+  <header class="topbar">
+    <button id="menuBtn" class="iconbtn" aria-label="Open navigation" aria-expanded="false">☰</button>
+    <a class="topbar__brand" href="index.html"><span class="logo">ml</span> cb-ml</a>
+    <span class="topbar__spacer"></span>
+    <button id="themeBtn" class="iconbtn" aria-label="Toggle theme">☾</button>
+  </header>
+
+  <!-- ===== Nav drawer (populated by app.js from CBML_NAV) ===== -->
+  <aside id="drawer" class="drawer" aria-label="Site navigation">
+    <div class="drawer__head">
+      <span class="logo">ml</span>
+      <div><div class="drawer__title">cb-ml</div><div class="drawer__sub">AI/ML · GenAI interview prep</div></div>
+    </div>
+    <nav id="drawerNav"></nav>
+  </aside>
+  <div id="scrim" class="scrim"></div>
+
+  <!-- ===== Content ===== -->
+  <main id="main">
+    <span class="eyebrow">Modern AI/ML · GenAI · for engineers</span>
+    <h1>Do anything on AI — the pragmatic way.</h1>
+    <p class="lede">
+      A hands-on field guide to <strong>modern</strong> ML, Deep Learning, Transformers, NLP,
+      Gen AI, LLMs and SLMs — built for an engineer who ships. Every topic is explained with an
+      animated diagram, interview Q&amp;A, and fully-commented PyTorch / Hugging&nbsp;Face code,
+      always answering the question that matters on the job: <em>what is the cheapest tool that
+      actually solves this?</em>
+    </p>
+
+    <!-- ===== The spine: escalation ladder hero ===== -->
+    <h2 id="ladder">The escalation ladder</h2>
+    <p>
+      The organizing idea of this whole site. Before you reach for a large model, climb only as
+      high as the problem forces you to. <strong>Tap a rung</strong> to see when to use it, whether
+      it needs a GPU, and roughly what it costs.
+    </p>
+
+    <div class="figure">
+      <!-- Interactive ladder. Each rung is a clickable group; JS updates the panel below. -->
+      <svg viewBox="0 0 420 300" role="img" aria-label="Cost and complexity escalation ladder from plain algorithms up to LLMs" style="max-width:460px;margin:0 auto;">
+        <defs>
+          <linearGradient id="rung" x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0" stop-color="#7c8cff"/><stop offset="1" stop-color="#38bdf8"/>
+          </linearGradient>
+          <marker id="arrHead" markerWidth="10" markerHeight="10" refX="6" refY="3" orient="auto">
+            <path d="M0,0 L6,3 L0,6 Z" fill="#9aa7b8"/>
+          </marker>
+        </defs>
+
+        <!-- upward cost/complexity axis -->
+        <line x1="26" y1="270" x2="26" y2="26" stroke="#9aa7b8" stroke-width="2" marker-end="url(#arrHead)"/>
+        <text x="16" y="150" fill="#9aa7b8" font-size="11" transform="rotate(-90 16 150)" text-anchor="middle">cost · compute · complexity ↑</text>
+
+        <!-- Rungs: bottom (cheapest) to top (most expensive). data-rung indexes the JS table. -->
+        <g class="rung" data-rung="0" tabindex="0" role="button" aria-label="Rung 1: Plain algorithm or rules" style="cursor:pointer">
+          <rect x="60" y="228" width="330" height="40" rx="9" fill="#161b22" stroke="#2a3140" stroke-width="1.5"/>
+          <text x="76" y="253" fill="#e6edf3" font-size="14" font-weight="700">1 · Algorithm / rules</text>
+          <text x="372" y="253" fill="#3fb950" font-size="11" text-anchor="end">CPU · ~free</text>
+        </g>
+        <g class="rung" data-rung="1" tabindex="0" role="button" aria-label="Rung 2: Classical ML" style="cursor:pointer">
+          <rect x="60" y="176" width="330" height="40" rx="9" fill="#161b22" stroke="#2a3140" stroke-width="1.5"/>
+          <text x="76" y="201" fill="#e6edf3" font-size="14" font-weight="700">2 · Classical ML</text>
+          <text x="372" y="201" fill="#3fb950" font-size="11" text-anchor="end">CPU · cheap</text>
+        </g>
+        <g class="rung" data-rung="2" tabindex="0" role="button" aria-label="Rung 3: Deep learning" style="cursor:pointer">
+          <rect x="60" y="124" width="330" height="40" rx="9" fill="#161b22" stroke="#2a3140" stroke-width="1.5"/>
+          <text x="76" y="149" fill="#e6edf3" font-size="14" font-weight="700">3 · Deep learning</text>
+          <text x="372" y="149" fill="#38bdf8" font-size="11" text-anchor="end">GPU · $$</text>
+        </g>
+        <g class="rung" data-rung="3" tabindex="0" role="button" aria-label="Rung 4: LLM or GenAI" style="cursor:pointer">
+          <rect x="60" y="72" width="330" height="40" rx="9" fill="#161b22" stroke="#2a3140" stroke-width="1.5"/>
+          <text x="76" y="97" fill="#e6edf3" font-size="14" font-weight="700">4 · LLM / GenAI</text>
+          <text x="372" y="97" fill="#38bdf8" font-size="11" text-anchor="end">GPU / $/tok</text>
+        </g>
+
+        <!-- highlight ring, moved by JS -->
+        <rect id="rungHi" x="58" y="226" width="334" height="44" rx="11" fill="none" stroke="url(#rung)" stroke-width="2.5" class="anim-pulse"/>
+      </svg>
+
+      <!-- Info panel updated on rung click -->
+      <div id="ladderPanel" class="callout ladder" style="text-align:left;max-width:460px;margin:14px auto 0;">
+        <div class="callout__title" id="ladderTitle">Tap a rung above</div>
+        <div id="ladderBody">Start at the bottom. Only climb when the rung below genuinely can’t solve the problem — each step up costs more compute, money, and latency.</div>
+        <div class="chips" id="ladderChips"></div>
+      </div>
+      <div class="figure__cap">The golden rule of an FDE: <strong>use the cheapest rung that actually works.</strong></div>
+    </div>
+
+    <div class="callout deeper">
+      <div class="callout__title">Why this framing</div>
+      Interviewers (and customers) don’t reward reaching for the biggest model. They reward
+      judgment: <em>“Can a plain algorithm solve it? No → can classical ML? … do you need a GPU or
+      is CPU fine?”</em> This site teaches the concepts <strong>and</strong> the rung each one lives on.
+    </div>
+
+    <hr>
+
+    <!-- ===== Part overviews (cards auto-built by app.js from CBML_NAV) ===== -->
+    <h2 id="p1">Part 1 · Foundations &amp; Concepts</h2>
+    <p>The bedrock — including the classical-ML rungs you must be able to defend, then deep learning and transformers.</p>
+    <div class="cardgrid" data-part="Part 1"></div>
+
+    <h2 id="p2">Part 2 · Building with LLMs</h2>
+    <p>The forward-deployed core: prompting, retrieval, vector search, and agents — how real GenAI systems get shipped.</p>
+    <div class="cardgrid" data-part="Part 2"></div>
+
+    <h2 id="p3">Part 3 · Train · Tune · Optimize · Evaluate</h2>
+    <p>Fine-tuning vs RAG vs prompting, inference optimization, fitting, and how to measure quality when there’s no single right answer.</p>
+    <div class="cardgrid" data-part="Part 3"></div>
+
+    <h2 id="p4">Part 4 · Production &amp; Problem-Solving</h2>
+    <p>Shipping and defending decisions: monitoring, guardrails, the full escalation ladder, and problem→solution case studies.</p>
+    <div class="cardgrid" data-part="Part 4"></div>
+
+    <div class="callout">
+      <div class="callout__title">How to use this site</div>
+      Pages are self-contained — jump to whatever you’re prepping. Each has an animated diagram,
+      collapsible interview Q&amp;A, and copy-paste code. Pages marked <em>“coming soon”</em> are
+      being added one at a time so each stays rich and complete.
+    </div>
+
+    <div class="sitefoot">
+      cb-ml · a personal, open learning site · built to be read on a phone.
+    </div>
+  </main>
+
+  <!-- ===== Page-specific: interactive ladder ===== -->
+  <script>
+    (function () {
+      // Data for each rung, bottom (0) to top (3).
+      var RUNGS = [
+        { y: 226, title: "1 · Plain algorithm / rules",
+          body: "if/else, regex, SQL, a formula, sorting, a threshold alert. If the rule is stateable and stable, no model is needed — and nothing beats it on cost, latency, or debuggability.",
+          chips: ['<span class="chip cpu">CPU</span>', '<span class="chip cost">~free</span>', '<span class="chip">e.g. tax calc, validation, alerts</span>'] },
+        { y: 174, title: "2 · Classical ML",
+          body: "Logistic regression, gradient-boosted trees (XGBoost/LightGBM), k-NN, clustering. The workhorse for tabular/structured data — interpretable, trains in seconds on a CPU, still beats deep learning on most spreadsheets.",
+          chips: ['<span class="chip cpu">CPU</span>', '<span class="chip cost">cheap</span>', '<span class="chip">e.g. churn, fraud scoring, forecasting</span>'] },
+        { y: 122, title: "3 · Deep learning",
+          body: "CNNs, RNNs, custom neural nets. Reach here for unstructured data (images, audio, signals) with lots of labels, or when classical ML plateaus. Training wants a GPU.",
+          chips: ['<span class="chip gpu">GPU (train)</span>', '<span class="chip cost">$$</span>', '<span class="chip">e.g. image/defect/speech</span>'] },
+        { y: 70, title: "4 · LLM / GenAI",
+          body: "Pretrained transformers, RAG, agents. Reach here for language understanding/generation, few labels, or when you need zero/few-shot generality. Pay in GPU memory or $/token — so prompt → RAG → fine-tune, in that order of cost.",
+          chips: ['<span class="chip gpu">GPU / API</span>', '<span class="chip cost">$/token</span>', '<span class="chip">e.g. doc Q&A, summarize, extract, chat</span>'] },
+      ];
+      var hi = document.getElementById("rungHi");
+      var title = document.getElementById("ladderTitle");
+      var body = document.getElementById("ladderBody");
+      var chips = document.getElementById("ladderChips");
+      function select(i) {
+        var r = RUNGS[i];
+        hi.setAttribute("y", r.y);
+        title.textContent = r.title;
+        body.textContent = r.body;
+        chips.innerHTML = r.chips.join("");
+        // reflect active state on the rung rectangles
+        document.querySelectorAll(".rung rect").forEach(function (rc, idx) {
+          rc.setAttribute("stroke", idx === i ? "#7c8cff" : "#2a3140");
+        });
+      }
+      document.querySelectorAll(".rung").forEach(function (g) {
+        var i = +g.getAttribute("data-rung");
+        g.addEventListener("click", function () { select(i); });
+        g.addEventListener("keydown", function (e) { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); select(i); } });
+      });
+      // hide the pulsing ring until a rung is chosen
+      hi.style.opacity = 0;
+      document.querySelectorAll(".rung").forEach(function (g) {
+        g.addEventListener("click", function () { hi.style.opacity = 1; }, { once: true });
+      });
+    })();
+  </script>
+</body>
+</html>
