@@ -43,7 +43,7 @@ window.CBML_NAV = [
     label: "Train · Tune · Optimize · Evaluate",
     items: [
       { href: "p3-fine-tuning.html", title: "Fine-tuning & PEFT",
-        desc: "LoRA/QLoRA, RLHF vs DPO, and the decision: fine-tune vs RAG vs prompt.", soon: true },
+        desc: "LoRA/QLoRA, RLHF vs DPO, and the decision: fine-tune vs RAG vs prompt." },
       { href: "p3-inference-optimization.html", title: "Inference Optimization",
         desc: "KV cache, quantization, batching, speculative decoding, latency SLAs.", soon: true },
       { href: "p3-fitting-generalization.html", title: "Fitting & Generalization",

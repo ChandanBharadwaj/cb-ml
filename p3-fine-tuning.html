@@ -1,0 +1,352 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Fine-tuning &amp; PEFT · cb-ml</title>
+  <meta name="description" content="Full fine-tuning vs PEFT, LoRA/QLoRA explained, instruction tuning and alignment (RLHF/DPO/GRPO), catastrophic forgetting, and the decision that matters most: fine-tune vs RAG vs prompt.">
+  <script>(function(){try{var t=localStorage.getItem('cbml-theme');if(t)document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+  <link rel="stylesheet" href="assets/styles.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+  <script defer src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+  <script defer src="assets/app.js"></script>
+</head>
+<body>
+  <a class="skip" href="#main">Skip to content</a>
+
+  <header class="topbar">
+    <button id="menuBtn" class="iconbtn" aria-label="Open navigation" aria-expanded="false">☰</button>
+    <a class="topbar__brand" href="index.html"><span class="logo">ml</span> cb-ml</a>
+    <span class="topbar__spacer"></span>
+    <button id="themeBtn" class="iconbtn" aria-label="Toggle theme">☾</button>
+  </header>
+
+  <aside id="drawer" class="drawer" aria-label="Site navigation">
+    <div class="drawer__head">
+      <span class="logo">ml</span>
+      <div><div class="drawer__title">cb-ml</div><div class="drawer__sub">AI/ML · GenAI interview prep</div></div>
+    </div>
+    <nav id="drawerNav"></nav>
+  </aside>
+  <div id="scrim" class="scrim"></div>
+
+  <main id="main">
+    <span class="eyebrow">Part 3 · Train · Tune · Optimize · Evaluate</span>
+    <h1>Fine-tuning &amp; PEFT</h1>
+    <p class="lede">
+      The most expensive LLM lever — changing the model’s <em>weights</em>. Done for the right reason
+      it bakes a behavior or style permanently into a smaller, cheaper model. Done for the wrong reason
+      (to add facts) it’s a slow, costly mistake. The single most valuable thing here is knowing
+      <strong>when</strong> to fine-tune versus RAG versus just prompting.
+    </p>
+
+    <div class="callout ladder">
+      <div class="callout__title">Where this sits on the ladder</div>
+      <strong>The last LLM lever: prompt → RAG → <u>fine-tune</u>.</strong> Reach here only when a good
+      prompt and retrieval aren’t enough — you need consistent <em>behavior/format/style</em> at scale,
+      or to shrink a big model into a cheap specialized one. It costs a training run and needs data, so
+      it’s the priciest option to reach for and to maintain.
+      <div class="chips">
+        <span class="chip gpu">GPU training</span>
+        <span class="chip cost">data + train cost</span>
+        <span class="chip">changes weights</span>
+      </div>
+    </div>
+
+    <nav class="toc" aria-label="On this page">
+      <div class="toc__title">On this page</div>
+      <ol>
+        <li><a href="#decision">Fine-tune vs RAG vs prompt</a></li>
+        <li><a href="#full-vs-peft">Full fine-tuning vs PEFT</a></li>
+        <li><a href="#lora">LoRA &amp; QLoRA</a></li>
+        <li><a href="#instruction">Instruction tuning</a></li>
+        <li><a href="#alignment">Alignment: RLHF, DPO, GRPO</a></li>
+        <li><a href="#forgetting">Catastrophic forgetting</a></li>
+        <li><a href="#qa">Interview Q&amp;A</a></li>
+        <li><a href="#code">Code: LoRA fine-tuning</a></li>
+      </ol>
+    </nav>
+
+    <!-- ===== Decision ===== -->
+    <h2 id="decision">Fine-tune vs RAG vs prompt — the decision</h2>
+    <p>
+      This is the question you’ll be asked, and the one that matters on the job. The mental model:
+      <strong>prompt</strong> changes instructions, <strong>RAG</strong> changes knowledge,
+      <strong>fine-tuning</strong> changes behavior.
+    </p>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>Need</th><th>Reach for</th><th>Why</th></tr></thead>
+        <tbody>
+          <tr><td>Different instructions / format, quick iteration</td><td><strong>Prompt</strong></td><td>Free, instant, no infra</td></tr>
+          <tr><td>The model must <em>know</em> our data (facts, fresh, private)</td><td><strong>RAG</strong></td><td>Inject knowledge at query time; cite &amp; update instantly</td></tr>
+          <tr><td>Consistent behavior/tone/format at scale; a narrow skill; shrink a model</td><td><strong>Fine-tune</strong></td><td>Bakes the behavior into weights; smaller prompt, lower per-call cost</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="callout warn">
+      <div class="callout__title">The classic trap</div>
+      “The model doesn’t know our docs, so let’s fine-tune.” Almost always wrong — that’s a knowledge
+      gap, which is <strong>RAG</strong>. Fine-tuning teaches <em>how to respond</em>, not <em>what facts
+      to know</em>. And they compose: fine-tune the behavior, RAG the knowledge.
+    </div>
+
+    <!-- ===== Full vs PEFT ===== -->
+    <h2 id="full-vs-peft">Full fine-tuning vs PEFT</h2>
+    <p>
+      <strong>Full fine-tuning</strong> updates every weight — maximum flexibility, but you need a copy
+      of the whole model’s worth of gradients/optimizer state in GPU memory (huge), and you get a full
+      new model per task. <strong>PEFT</strong> (Parameter-Efficient Fine-Tuning) freezes the base model
+      and trains a <em>tiny</em> number of new parameters — usually &lt;1% — getting most of the quality
+      for a fraction of the cost. PEFT is the default in practice, and <strong>LoRA</strong> is the PEFT
+      everyone means.
+    </p>
+
+    <!-- ===== LoRA ===== -->
+    <h2 id="lora">LoRA &amp; QLoRA</h2>
+    <p>
+      <strong>LoRA</strong> (Low-Rank Adaptation) is the key idea to be able to draw. Instead of updating
+      a big weight matrix <code>W</code> (say 4096×4096), freeze it and learn a small
+      <strong>low-rank</strong> update <code>ΔW = B·A</code>, where <code>A</code> and <code>B</code> are
+      skinny matrices (rank <code>r</code>, e.g. 8–64). You train only <code>A</code> and <code>B</code> —
+      a few million params instead of billions — then add <code>W + BA</code> at inference.
+    </p>
+
+    <div class="figure">
+      <svg viewBox="0 0 420 200" role="img" aria-label="LoRA decomposes a large weight update into the product of two small low-rank matrices">
+        <g font-family="monospace" font-size="11" text-anchor="middle">
+          <!-- frozen W -->
+          <rect x="20" y="45" width="90" height="90" rx="6" fill="var(--surface-2,#1c2333)" stroke="var(--border-strong,#3a4457)"/>
+          <text x="65" y="90" fill="var(--text-muted,#9aa7b8)">W (frozen)</text>
+          <text x="65" y="106" fill="var(--text-faint,#6b7688)" font-size="9">d × d — huge</text>
+          <text x="128" y="95" font-size="20" fill="var(--text-muted,#9aa7b8)">+</text>
+
+          <!-- B (d x r) -->
+          <rect x="150" y="45" width="34" height="90" rx="6" fill="var(--accent-soft,#2b2f55)" stroke="#7c8cff"/>
+          <text x="167" y="94" fill="#7c8cff">B</text>
+          <text x="167" y="150" fill="var(--text-faint,#6b7688)" font-size="9">d×r</text>
+          <text x="196" y="95" font-size="16" fill="var(--text-muted,#9aa7b8)">×</text>
+
+          <!-- A (r x d) -->
+          <rect x="212" y="72" width="90" height="34" rx="6" fill="var(--accent-soft,#2b2f55)" stroke="#7c8cff"/>
+          <text x="257" y="94" fill="#7c8cff">A</text>
+          <text x="257" y="122" fill="var(--text-faint,#6b7688)" font-size="9">r×d</text>
+
+          <text x="322" y="95" font-size="16" fill="var(--text-muted,#9aa7b8)">=</text>
+
+          <!-- result -->
+          <rect x="338" y="45" width="70" height="90" rx="6" fill="none" stroke="#3fb950" stroke-dasharray="4 3"/>
+          <text x="373" y="86" fill="#3fb950">adapted</text>
+          <text x="373" y="101" fill="#3fb950">W</text>
+        </g>
+        <text x="210" y="180" text-anchor="middle" font-size="10" fill="var(--text-muted,#9aa7b8)">train only the small blue B and A (rank r) — millions of params, not billions</text>
+      </svg>
+      <div class="figure__cap">LoRA: freeze W, learn a low-rank ΔW = B·A. The two skinny matrices hold almost all the useful adaptation at a tiny fraction of the parameters.</div>
+    </div>
+
+    <p>
+      <strong>QLoRA</strong> goes further: it <strong>quantizes the frozen base model to 4-bit</strong>
+      (shrinking its memory ~4×) while training the LoRA adapters in higher precision on top. That’s what
+      lets you fine-tune a big model on a single consumer GPU — a huge deal for cost and for keeping data
+      on-prem.
+    </p>
+    <div class="callout deeper">
+      <div class="callout__title">Why LoRA is a big deal for an FDE</div>
+      Adapters are tiny (megabytes). You can keep one frozen base model and hot-swap a
+      <strong>per-customer LoRA adapter</strong> — cheap to train, cheap to store, cheap to serve, and
+      the customer’s data never trains the shared base. That’s a deployment superpower.
+    </div>
+
+    <!-- ===== Instruction tuning ===== -->
+    <h2 id="instruction">Instruction tuning</h2>
+    <p>
+      A raw pretrained model just continues text; it isn’t helpful out of the box.
+      <strong>Instruction tuning</strong> is supervised fine-tuning (SFT) on many
+      <em>(instruction → good response)</em> pairs, which teaches the model to <em>follow instructions</em>
+      and adopt a helpful assistant style. It’s the first step that turns a base model into something
+      chat-like — before any alignment.
+    </p>
+
+    <!-- ===== Alignment ===== -->
+    <h2 id="alignment">Alignment: RLHF, DPO, GRPO</h2>
+    <p>
+      After SFT, <strong>alignment</strong> tunes the model toward human preferences — helpful, honest,
+      harmless — and toward the answers people actually prefer.
+    </p>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>Method</th><th>How</th><th>Note</th></tr></thead>
+        <tbody>
+          <tr><td><strong>RLHF</strong></td><td>Train a reward model from human preference pairs, then RL (PPO) the LLM to maximize it</td><td>Powerful, but complex &amp; unstable (3 models in play)</td></tr>
+          <tr><td><strong>DPO</strong></td><td>Optimize directly on preference pairs — no separate reward model or RL loop</td><td>Simpler, stable, now a common default</td></tr>
+          <tr><td><strong>GRPO</strong></td><td>Group-relative RL that skips the value model; scores groups of samples</td><td>Popular for reasoning models (e.g. DeepSeek-R1)</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="callout deeper">
+      <div class="callout__title">One-liner</div>
+      “RLHF aligns via a learned reward model + RL; DPO gets similar results by optimizing preference
+      pairs directly, which is simpler and more stable; GRPO is an RL variant popular for reasoning
+      training. Most teams reach for DPO first now.”
+    </div>
+
+    <!-- ===== Forgetting ===== -->
+    <h2 id="forgetting">Catastrophic forgetting</h2>
+    <p>
+      When you fine-tune on a narrow dataset, the model can <strong>overwrite general capabilities</strong>
+      it had — it gets great at your task and worse at everything else. Mitigations: use PEFT/LoRA (the
+      base stays frozen, so general knowledge is preserved), mix in some general data, keep learning
+      rates low, and don’t over-train. It’s a strong argument for LoRA over full fine-tuning when you
+      only have task-specific data.
+    </p>
+
+    <!-- ===== Q&A ===== -->
+    <h2 id="qa">Interview Q&amp;A</h2>
+
+    <details class="qa">
+      <summary class="qa__q"><span class="badge core">core</span>Explain LoRA. Why is it so widely used?</summary>
+      <div class="qa__a">
+        <p>
+          LoRA freezes the pretrained weights and learns a low-rank update <code>ΔW = B·A</code> for the
+          target matrices, where <code>A</code> and <code>B</code> are small (rank r). You train only those
+          few million parameters instead of billions, so it needs far less GPU memory and produces tiny,
+          swappable adapter files — while recovering most of full fine-tuning’s quality. It’s popular
+          because it makes fine-tuning cheap, storable, and per-task swappable, and it sidesteps
+          catastrophic forgetting by leaving the base frozen.
+        </p>
+      </div>
+    </details>
+
+    <details class="qa">
+      <summary class="qa__q"><span class="badge core">core</span>Fine-tuning vs RAG — when each?</summary>
+      <div class="qa__a">
+        <p>
+          RAG for knowledge (facts, private/fresh data, citations, frequent updates); fine-tuning for
+          behavior (consistent format/tone, a specialized skill, or shrinking a big model into a cheaper
+          specialized one). If the gap is “the model doesn’t know our data,” that’s retrieval, not
+          training. They compose — fine-tune how it responds, RAG what it responds with — and per the
+          ladder you try prompting first.
+        </p>
+      </div>
+    </details>
+
+    <details class="qa">
+      <summary class="qa__q"><span class="badge senior">senior</span>What does QLoRA add over LoRA, and what’s the tradeoff?</summary>
+      <div class="qa__a">
+        <p>
+          QLoRA quantizes the frozen base model to 4-bit (using NF4 + double quantization) so it fits in
+          far less memory, then trains LoRA adapters in higher precision on top. The win is being able to
+          fine-tune large models on a single GPU. The tradeoff is a small quality hit from quantizing the
+          base and somewhat slower training due to dequantization, but in practice it’s close to LoRA
+          quality at a fraction of the hardware — which is why it democratized fine-tuning.
+        </p>
+      </div>
+    </details>
+
+    <details class="qa">
+      <summary class="qa__q"><span class="badge senior">senior</span>RLHF vs DPO — why did DPO catch on?</summary>
+      <div class="qa__a">
+        <p>
+          RLHF trains a separate reward model from human preference pairs and then uses RL (PPO) to
+          optimize the LLM against it — effective but complex and unstable, juggling three models. DPO
+          derives a loss that optimizes the policy <em>directly</em> on the preference pairs, mathematically
+          equivalent to the RLHF objective under common assumptions, with no reward model or RL loop. It’s
+          simpler, more stable, and cheaper to run, so many teams now default to it — reaching for full
+          RLHF/GRPO only when they need the extra control.
+        </p>
+      </div>
+    </details>
+
+    <details class="qa">
+      <summary class="qa__q"><span class="badge trap">trap</span>You fine-tuned a model and now it’s worse at general tasks. What happened?</summary>
+      <div class="qa__a">
+        <p>
+          Catastrophic forgetting — training on a narrow dataset overwrote general capabilities. Fixes:
+          switch to LoRA/PEFT so the base weights stay frozen; mix general-purpose data into the training
+          set; lower the learning rate and train for fewer steps; and evaluate on a broad held-out set,
+          not just your task, so you catch the regression. It’s a key reason PEFT is preferred when you
+          only have task-specific data.
+        </p>
+      </div>
+    </details>
+
+    <details class="qa">
+      <summary class="qa__q"><span class="badge senior">senior</span>How would you serve fine-tuned models for 50 different customers cost-effectively?</summary>
+      <div class="qa__a">
+        <p>
+          Train a LoRA adapter per customer on top of one shared, frozen base model. Adapters are only a
+          few megabytes, so you store 50 of them cheaply and load the relevant one per request (or serve
+          many with adapter-aware batching). You keep a single base model in GPU memory instead of 50 full
+          models, each customer’s data trains only their adapter, and updates are cheap. That’s the
+          canonical LoRA deployment pattern — and a great FDE answer.
+        </p>
+      </div>
+    </details>
+
+    <!-- ===== Code ===== -->
+    <h2 id="code">Code: LoRA fine-tuning with Hugging Face</h2>
+    <p>
+      The real workflow: load a base model, wrap it with a LoRA config (PEFT), and train only the
+      adapters. Note how few lines turn a frozen model into a trainable one — and how few parameters
+      actually get updated.
+    </p>
+
+    <div class="codewrap">
+      <div class="codewrap__bar"><span class="codewrap__lang">python</span><span>LoRA fine-tuning with peft + Trainer</span><button class="copybtn" type="button">Copy</button></div>
+<pre><code class="language-python"># Parameter-efficient fine-tuning with LoRA. Only the adapters train; base stays frozen.
+# pip install transformers peft datasets accelerate
+from transformers import AutoModelForCausalLM, AutoTokenizer, TrainingArguments, Trainer
+from peft import LoraConfig, get_peft_model
+from datasets import load_dataset
+
+base = "Qwen/Qwen2.5-0.5B"                       # small base so this runs on modest hardware
+tok = AutoTokenizer.from_pretrained(base)
+tok.pad_token = tok.eos_token
+model = AutoModelForCausalLM.from_pretrained(base)
+
+# 1) LoRA config: WHERE to inject adapters and how big (rank r).
+lora = LoraConfig(
+    r=8,                      # rank of the update — bigger = more capacity, more params
+    lora_alpha=16,            # scaling factor for the LoRA update
+    target_modules=["q_proj", "v_proj"],   # attach to attention query/value projections
+    lora_dropout=0.05,
+    task_type="CAUSAL_LM",
+)
+
+# 2) Wrap the frozen base with LoRA — this is the whole trick.
+model = get_peft_model(model, lora)
+model.print_trainable_parameters()
+# -> trainable params: ~0.5M || all params: ~500M || trainable%: ~0.1%
+#    You are training a tiny sliver of the model.
+
+# 3) Tiny instruction-style dataset (in reality: your task-specific pairs).
+data = load_dataset("json", data_files="train.jsonl")["train"]
+def fmt(ex):
+    text = f"### Instruction:\n{ex['instruction']}\n### Response:\n{ex['response']}"
+    out = tok(text, truncation=True, max_length=256, padding="max_length")
+    out["labels"] = out["input_ids"].copy()      # causal LM: predict the same tokens
+    return out
+data = data.map(fmt, remove_columns=data.column_names)
+
+# 4) Train — standard Trainer loop, but only the LoRA params receive gradients.
+args = TrainingArguments(output_dir="out", per_device_train_batch_size=4,
+                         num_train_epochs=3, learning_rate=2e-4, logging_steps=10)
+Trainer(model=model, args=args, train_dataset=data).train()
+
+# 5) Save just the ADAPTER (a few MB), not the whole model. Swap it in at inference.
+model.save_pretrained("my-lora-adapter")
+# Serve: load the base once + this adapter. Keep one adapter per task/customer.
+</code></pre>
+    </div>
+
+    <div class="callout">
+      <div class="callout__title">The pattern to remember</div>
+      <strong>Prompt → RAG → fine-tune</strong>, and when you do fine-tune, reach for <strong>LoRA/QLoRA</strong>
+      first: tiny, cheap, swappable, forgetting-resistant. Full fine-tuning is the exception, not the rule.
+    </div>
+
+    <nav class="pagenav" id="pageNav" aria-label="Page navigation"></nav>
+    <div class="sitefoot">cb-ml · Part 3 · Train · Tune · Optimize · Evaluate</div>
+  </main>
+</body>
+</html>
