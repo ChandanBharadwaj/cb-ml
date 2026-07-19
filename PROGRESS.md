@@ -35,7 +35,7 @@ Legend: `[ ]` todo · `[~]` in progress · `[x]` done
 
 ## Part 3 · Train · Tune · Optimize · Evaluate
 - [x] `p3-fine-tuning.html` — LoRA/QLoRA, RLHF/DPO/GRPO, fine-tune vs RAG vs prompt
-- [ ] `p3-inference-optimization.html` — KV cache, quantization, batching, speculative decoding, latency SLAs
+- [x] `p3-inference-optimization.html` — KV cache, quantization, batching, speculative decoding, latency SLAs
 - [ ] `p3-fitting-generalization.html` — over/underfit, bias-variance, regularization, double descent, leakage
 - [ ] `p3-metrics-evaluation.html` — precision/recall/threshold/calibration + LLM eval, LLM-as-judge
 

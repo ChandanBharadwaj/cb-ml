@@ -45,7 +45,7 @@ window.CBML_NAV = [
       { href: "p3-fine-tuning.html", title: "Fine-tuning & PEFT",
         desc: "LoRA/QLoRA, RLHF vs DPO, and the decision: fine-tune vs RAG vs prompt." },
       { href: "p3-inference-optimization.html", title: "Inference Optimization",
-        desc: "KV cache, quantization, batching, speculative decoding, latency SLAs.", soon: true },
+        desc: "KV cache, quantization, batching, speculative decoding, latency SLAs." },
       { href: "p3-fitting-generalization.html", title: "Fitting & Generalization",
         desc: "Over/underfitting, bias-variance, regularization, double descent, leakage.", soon: true },
       { href: "p3-metrics-evaluation.html", title: "Metrics & Evaluation",

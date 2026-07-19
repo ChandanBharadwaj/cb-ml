@@ -1,0 +1,352 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Inference Optimization · cb-ml</title>
+  <meta name="description" content="Making LLMs fast and cheap enough to ship: KV cache, quantization, continuous batching, speculative decoding, vLLM/PagedAttention, and the real-time latency SLAs (TTFT, p95, throughput, cost) you must hit.">
+  <script>(function(){try{var t=localStorage.getItem('cbml-theme');if(t)document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+  <link rel="stylesheet" href="assets/styles.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+  <script defer src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+  <script defer src="assets/app.js"></script>
+</head>
+<body>
+  <a class="skip" href="#main">Skip to content</a>
+
+  <header class="topbar">
+    <button id="menuBtn" class="iconbtn" aria-label="Open navigation" aria-expanded="false">☰</button>
+    <a class="topbar__brand" href="index.html"><span class="logo">ml</span> cb-ml</a>
+    <span class="topbar__spacer"></span>
+    <button id="themeBtn" class="iconbtn" aria-label="Toggle theme">☾</button>
+  </header>
+
+  <aside id="drawer" class="drawer" aria-label="Site navigation">
+    <div class="drawer__head">
+      <span class="logo">ml</span>
+      <div><div class="drawer__title">cb-ml</div><div class="drawer__sub">AI/ML · GenAI interview prep</div></div>
+    </div>
+    <nav id="drawerNav"></nav>
+  </aside>
+  <div id="scrim" class="scrim"></div>
+
+  <main id="main">
+    <span class="eyebrow">Part 3 · Train · Tune · Optimize · Evaluate</span>
+    <h1>Inference Optimization</h1>
+    <p class="lede">
+      A model that’s accurate but too slow or too expensive doesn’t ship. This page is the gap between
+      “it works in a notebook” and “it serves 1,000 users under a 2-second SLA” — the KV cache,
+      quantization, batching, and serving tricks that make LLMs fast and cheap, plus the
+      <strong>real-time thresholds</strong> you’re actually measured against.
+    </p>
+
+    <div class="callout ladder">
+      <div class="callout__title">Where this sits on the ladder</div>
+      <strong>The operations layer of rung 4.</strong> None of this changes what the model <em>knows</em>
+      — it changes what it <em>costs</em> to run. It’s also the strongest argument for staying on a lower
+      rung: a GBM answers in microseconds on a CPU, while an LLM needs all these tricks just to hit a
+      sane latency. Optimization is how you make rung 4 affordable when you truly need it.
+      <div class="chips">
+        <span class="chip gpu">GPU memory-bound</span>
+        <span class="chip cost">$/token · latency SLA</span>
+        <span class="chip">serving, not training</span>
+      </div>
+    </div>
+
+    <nav class="toc" aria-label="On this page">
+      <div class="toc__title">On this page</div>
+      <ol>
+        <li><a href="#slas">The metrics: TTFT, TPOT, throughput</a></li>
+        <li><a href="#prefill">Prefill vs decode &amp; the KV cache</a></li>
+        <li><a href="#attention">GQA &amp; MoE — cheaper by design</a></li>
+        <li><a href="#quant">Quantization</a></li>
+        <li><a href="#serving">Batching, vLLM &amp; speculative decoding</a></li>
+        <li><a href="#caching">Caching</a></li>
+        <li><a href="#qa">Interview Q&amp;A</a></li>
+        <li><a href="#code">Code: measuring latency</a></li>
+      </ol>
+    </nav>
+
+    <!-- ===== SLAs ===== -->
+    <h2 id="slas">The metrics: TTFT, TPOT, throughput</h2>
+    <p>
+      You can’t optimize what you don’t name. LLM serving has its own vocabulary of thresholds:
+    </p>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>Metric</th><th>What</th><th>Why it matters</th></tr></thead>
+        <tbody>
+          <tr><td><strong>TTFT</strong><br>(time to first token)</td><td>Latency until the first token appears</td><td>Perceived responsiveness in a chat UI</td></tr>
+          <tr><td><strong>TPOT / ITL</strong><br>(time per output token)</td><td>Gap between subsequent tokens</td><td>How fast the stream “types”</td></tr>
+          <tr><td><strong>Throughput</strong></td><td>Total tokens/sec across all requests</td><td>Capacity &amp; cost efficiency (tokens per $)</td></tr>
+          <tr><td><strong>p50 / p95 / p99</strong></td><td>Latency percentiles, not averages</td><td>SLAs live in the tail — p95 is what users feel</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="callout warn">
+      <div class="callout__title">FDE framing</div>
+      There’s a fundamental <strong>latency ↔ throughput ↔ cost</strong> triangle. Bigger batches raise
+      throughput (cheaper per token) but hurt per-request latency; smaller models and quantization help
+      both at some quality cost. You don’t “make it fast” — you pick an operating point that meets the
+      <strong>p95 SLA</strong> at acceptable cost. Always design to percentiles, never averages.
+    </div>
+
+    <!-- ===== Prefill ===== -->
+    <h2 id="prefill">Prefill vs decode &amp; the KV cache</h2>
+    <p>
+      LLM inference has two phases with very different cost profiles:
+    </p>
+    <ul>
+      <li><strong>Prefill</strong> — process the whole prompt in parallel to produce the first token.
+        Compute-bound; fast per token, done once.</li>
+      <li><strong>Decode</strong> — generate the rest one token at a time. Memory-bandwidth-bound; this
+        is where most of the latency lives, and it can’t be parallelized across the sequence.</li>
+    </ul>
+    <p>
+      The <strong>KV cache</strong> is the key optimization: instead of recomputing attention over all
+      previous tokens at every step, the model <em>caches</em> the keys and values of past tokens and
+      reuses them. It turns per-step cost from “re-read the whole sequence” into “process one new token.”
+      The catch: the cache <strong>grows with sequence length × layers × heads</strong> and can dominate
+      GPU memory on long contexts — which is exactly what the next tricks attack.
+    </p>
+
+    <div class="figure">
+      <svg viewBox="0 0 420 170" role="img" aria-label="KV cache grows one entry per generated token, consuming more memory as the sequence lengthens">
+        <text x="210" y="16" text-anchor="middle" font-size="11" fill="var(--text-muted,#9aa7b8)">KV cache grows one slot per new token →</text>
+        <!-- growing bars representing cache slots -->
+        <g>
+          <rect x="30"  y="110" width="26" height="26" rx="4" fill="#7c8cff" opacity="0.9"/>
+          <rect x="62"  y="96"  width="26" height="40" rx="4" fill="#7c8cff" opacity="0.85" style="animation:fadeSlide .4s ease .1s both"/>
+          <rect x="94"  y="82"  width="26" height="54" rx="4" fill="#7c8cff" opacity="0.8" style="animation:fadeSlide .4s ease .2s both"/>
+          <rect x="126" y="68"  width="26" height="68" rx="4" fill="#38bdf8" opacity="0.8" style="animation:fadeSlide .4s ease .3s both"/>
+          <rect x="158" y="54"  width="26" height="82" rx="4" fill="#38bdf8" opacity="0.75" style="animation:fadeSlide .4s ease .4s both"/>
+          <rect x="190" y="40"  width="26" height="96" rx="4" fill="#38bdf8" opacity="0.7" style="animation:fadeSlide .4s ease .5s both"/>
+          <rect x="222" y="30"  width="26" height="106" rx="4" fill="#f0b429" opacity="0.75" style="animation:fadeSlide .4s ease .6s both"/>
+        </g>
+        <line x1="24" y1="136" x2="330" y2="136" stroke="var(--border-strong,#3a4457)"/>
+        <text x="30" y="152" font-size="9" fill="var(--text-muted,#9aa7b8)">token 1</text>
+        <text x="222" y="152" font-size="9" fill="var(--text-muted,#9aa7b8)">token n</text>
+        <text x="300" y="60" font-size="10" fill="#f0b429">↑ memory</text>
+      </svg>
+      <div class="figure__cap">Each generated token appends a key/value entry. Longer sequences (and more concurrent requests) mean a bigger cache — often the real memory bottleneck, not the model weights.</div>
+    </div>
+
+    <!-- ===== Attention ===== -->
+    <h2 id="attention">GQA &amp; MoE — cheaper by design</h2>
+    <ul>
+      <li><strong>GQA (Grouped-Query Attention)</strong> — multiple query heads <em>share</em> one set of
+        key/value heads. That shrinks the KV cache several-fold with minimal quality loss, so it’s in
+        nearly every modern model. (MQA is the extreme: all queries share one KV head.)</li>
+      <li><strong>MoE (Mixture of Experts)</strong> — the feed-forward layer is split into many “expert”
+        sub-networks, and a router activates only a few per token. So a model can have huge total
+        capacity (e.g. hundreds of billions of params) while only <em>using</em> a fraction per token —
+        big quality, lower per-token compute. The tradeoff: all experts must sit in memory.</li>
+      <li><strong>FlashAttention</strong> — an exact but IO-aware attention kernel that avoids writing the
+        big attention matrix to slow memory. Same math, much faster and lower memory. Free win.</li>
+    </ul>
+
+    <!-- ===== Quantization ===== -->
+    <h2 id="quant">Quantization</h2>
+    <p>
+      Store and compute weights (and sometimes the KV cache) in lower precision to cut memory and speed
+      things up. The common ladder: <strong>FP16/BF16</strong> (standard) → <strong>INT8</strong> (~2×
+      smaller, tiny quality loss) → <strong>INT4</strong> (~4× smaller, more loss). Because LLM decoding
+      is <em>memory-bandwidth-bound</em>, moving fewer bytes per token often makes inference faster too,
+      not just smaller. Methods you can name: GPTQ, AWQ, bitsandbytes (NF4).
+    </p>
+    <div class="callout deeper">
+      <div class="callout__title">Rule of thumb</div>
+      INT8 is nearly free quality-wise and almost always worth it for serving. INT4 is the aggressive
+      option when memory/cost is tight — test quality on your task first. Quantizing the <em>KV cache</em>
+      (not just weights) is an increasingly common way to fit longer contexts.
+    </div>
+
+    <!-- ===== Serving ===== -->
+    <h2 id="serving">Batching, vLLM &amp; speculative decoding</h2>
+    <ul>
+      <li><strong>Continuous (in-flight) batching</strong> — instead of waiting to batch requests
+        together, the server swaps new requests in as others finish each token. Massively higher GPU
+        utilization and throughput. This is the single biggest serving win.</li>
+      <li><strong>vLLM &amp; PagedAttention</strong> — vLLM manages the KV cache like OS virtual memory,
+        in non-contiguous “pages,” eliminating the memory fragmentation that wasted capacity. It’s the
+        de-facto high-throughput serving engine (SGLang and TensorRT-LLM are peers).</li>
+      <li><strong>Speculative decoding</strong> — a small “draft” model proposes several tokens, and the
+        big model verifies them in one parallel pass, accepting the correct prefix. Same output
+        distribution, fewer big-model steps → lower latency. A clever way to beat the sequential-decode
+        bottleneck.</li>
+    </ul>
+
+    <!-- ===== Caching ===== -->
+    <h2 id="caching">Caching</h2>
+    <ul>
+      <li><strong>Prompt / prefix caching</strong> — reuse the KV cache for a shared prefix (a long
+        system prompt, a fixed RAG context) across requests, so you don’t re-run prefill every time.
+        Big TTFT and cost win for repeated prompts.</li>
+      <li><strong>Semantic caching</strong> — if a new query is embedding-similar to a past one, return
+        the cached answer instead of calling the model. Cuts cost and latency for common/duplicate
+        questions — but you must bound similarity carefully to avoid wrong hits.</li>
+    </ul>
+
+    <!-- ===== Q&A ===== -->
+    <h2 id="qa">Interview Q&amp;A</h2>
+
+    <details class="qa">
+      <summary class="qa__q"><span class="badge core">core</span>What is the KV cache and why does it matter?</summary>
+      <div class="qa__a">
+        <p>
+          During generation the model would otherwise recompute attention keys and values for every prior
+          token at each step. The KV cache stores those keys/values and reuses them, so each new step only
+          processes the single new token — turning quadratic re-computation into linear work. The cost is
+          memory: the cache grows with sequence length × layers × KV-heads and often becomes the dominant
+          memory consumer, which is why GQA, paged attention, and KV-cache quantization exist.
+        </p>
+      </div>
+    </details>
+
+    <details class="qa">
+      <summary class="qa__q"><span class="badge core">core</span>Which metrics define an LLM serving SLA?</summary>
+      <div class="qa__a">
+        <p>
+          Time to first token (TTFT) for perceived responsiveness, time per output token (TPOT/ITL) for
+          streaming speed, and throughput (tokens/sec) for capacity and cost. Crucially you track
+          percentiles — p95/p99 — not averages, because the tail is what users actually experience. And
+          you balance the latency–throughput–cost triangle: batching improves throughput/cost but can hurt
+          per-request latency.
+        </p>
+      </div>
+    </details>
+
+    <details class="qa">
+      <summary class="qa__q"><span class="badge senior">senior</span>Why is continuous batching such a big deal?</summary>
+      <div class="qa__a">
+        <p>
+          Requests finish at different times, so static batching wastes the GPU waiting for the slowest
+          one and can’t admit new work mid-flight. Continuous (in-flight) batching schedules at the
+          token level — as soon as one sequence emits a token or finishes, another request’s tokens fill
+          the slot — keeping the GPU saturated. It can multiply throughput several-fold with the same
+          hardware, which is why engines like vLLM are built around it.
+        </p>
+      </div>
+    </details>
+
+    <details class="qa">
+      <summary class="qa__q"><span class="badge senior">senior</span>How does speculative decoding speed up generation without changing the output?</summary>
+      <div class="qa__a">
+        <p>
+          A small, cheap draft model proposes the next few tokens; the large target model then verifies
+          all of them in a single parallel forward pass and accepts the longest correct prefix (rejecting
+          from the first mismatch). Because verification is parallel and cheaper than generating each token
+          sequentially with the big model, you get fewer expensive steps for the same result. With a
+          proper acceptance rule the output distribution is identical to plain decoding — it’s a latency
+          optimization, not a quality tradeoff.
+        </p>
+      </div>
+    </details>
+
+    <details class="qa">
+      <summary class="qa__q"><span class="badge trap">trap</span>Your average latency is fine but users complain it’s slow. What do you check?</summary>
+      <div class="qa__a">
+        <p>
+          Averages hide the tail — look at p95/p99. A good mean with a bad p99 means some requests are far
+          too slow (long inputs, cache misses, queueing under load, cold starts, GC/allocator stalls).
+          Also separate TTFT from total time: if TTFT is high the UI feels frozen even if total throughput
+          is fine. Fix by designing to percentiles: cap context length, add prefix caching, tune batch
+          size, autoscale, and shed or queue load gracefully.
+        </p>
+      </div>
+    </details>
+
+    <details class="qa">
+      <summary class="qa__q"><span class="badge core">core</span>When is quantization worth it, and what’s the risk?</summary>
+      <div class="qa__a">
+        <p>
+          Almost always worth it for serving: INT8 roughly halves memory with negligible quality loss, and
+          because decode is memory-bandwidth-bound, moving fewer bytes can also speed it up. INT4 saves
+          more but with a larger quality hit, so validate on your task. The risk is silent quality
+          degradation on edge cases, so you quantize <em>and</em> re-run your evals rather than trusting
+          that “it still sounds fine.”
+        </p>
+      </div>
+    </details>
+
+    <!-- ===== Code ===== -->
+    <h2 id="code">Code: measuring latency &amp; loading quantized</h2>
+    <p>
+      You can’t hit an SLA you don’t measure. First, the two numbers that matter — TTFT and total time —
+      via streaming; then loading a model in 4-bit to cut memory.
+    </p>
+
+    <div class="codewrap">
+      <div class="codewrap__bar"><span class="codewrap__lang">python</span><span>measure TTFT + tokens/sec by streaming</span><button class="copybtn" type="button">Copy</button></div>
+<pre><code class="language-python"># Measure the metrics that define your SLA: TTFT and output tokens/sec.
+# pip install openai
+from openai import OpenAI
+import time
+
+client = OpenAI()
+start = time.perf_counter()
+first_token_at = None
+n_tokens = 0
+
+# stream=True lets us time the FIRST token separately from the rest.
+stream = client.chat.completions.create(
+    model="gpt-4o-mini",
+    messages=[{"role": "user", "content": "Explain KV cache in 3 sentences."}],
+    stream=True,
+)
+for chunk in stream:
+    delta = chunk.choices[0].delta.content
+    if delta:
+        if first_token_at is None:
+            first_token_at = time.perf_counter()      # <- TTFT boundary
+        n_tokens += 1
+
+end = time.perf_counter()
+ttft = first_token_at - start                          # time to first token (perceived latency)
+gen_time = end - first_token_at                        # time spent streaming the rest
+print(f"TTFT:        {ttft*1000:.0f} ms")
+print(f"output tok/s: {n_tokens / gen_time:.1f}")      # streaming speed (TPOT ~ 1/this)
+# In load tests you'd collect these across many requests and report p50/p95/p99,
+# NOT the average — the SLA lives in the tail.
+</code></pre>
+    </div>
+
+    <div class="codewrap">
+      <div class="codewrap__bar"><span class="codewrap__lang">python</span><span>load a model in 4-bit to cut GPU memory</span><button class="copybtn" type="button">Copy</button></div>
+<pre><code class="language-python"># Self-hosting? Quantize on load to fit bigger models on smaller GPUs.
+# pip install transformers bitsandbytes accelerate
+from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
+import torch
+
+# NF4 4-bit config: ~4x smaller weights than FP16, small quality cost.
+bnb = BitsAndBytesConfig(
+    load_in_4bit=True,
+    bnb_4bit_quant_type="nf4",              # normalized float 4 — good default
+    bnb_4bit_compute_dtype=torch.bfloat16,  # compute in bf16 for stability
+    bnb_4bit_use_double_quant=True,         # extra compression of the quant constants
+)
+
+tok = AutoTokenizer.from_pretrained("Qwen/Qwen2.5-7B-Instruct")
+model = AutoModelForCausalLM.from_pretrained(
+    "Qwen/Qwen2.5-7B-Instruct",
+    quantization_config=bnb,                # a 7B model now fits in ~5-6 GB instead of ~14 GB
+    device_map="auto",
+)
+# Same API as full precision — you traded a little quality for a lot of memory.
+# Always re-run your evals after quantizing; don't trust "it still sounds fine".
+</code></pre>
+    </div>
+
+    <div class="callout">
+      <div class="callout__title">The pattern to remember</div>
+      Optimization order for serving: <strong>quantize</strong> (fit it) → <strong>continuous batching +
+      vLLM</strong> (utilize the GPU) → <strong>prefix/semantic caching</strong> (skip repeat work) →
+      <strong>speculative decoding</strong> (shave latency) — all measured against <strong>p95</strong>,
+      not averages.
+    </div>
+
+    <nav class="pagenav" id="pageNav" aria-label="Page navigation"></nav>
+    <div class="sitefoot">cb-ml · Part 3 · Train · Tune · Optimize · Evaluate</div>
+  </main>
+</body>
+</html>
