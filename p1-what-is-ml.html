@@ -1,0 +1,457 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>What is Machine Learning? · cb-ml</title>
+  <meta name="description" content="The plain-language foundation before any model: what machine learning actually is, the four ways models learn, the data vocabulary (features, labels, train/validation/test), training vs inference, parameters vs hyperparameters, and the end-to-end ML lifecycle.">
+  <script>(function(){try{var t=localStorage.getItem('cbml-theme');if(t)document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+  <link rel="stylesheet" href="assets/styles.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+  <script defer src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+  <script defer src="assets/app.js"></script>
+</head>
+<body>
+  <a class="skip" href="#main">Skip to content</a>
+
+  <header class="topbar">
+    <button id="menuBtn" class="iconbtn" aria-label="Open navigation" aria-expanded="false">☰</button>
+    <a class="topbar__brand" href="index.html"><span class="logo">ml</span> cb-ml</a>
+    <span class="topbar__spacer"></span>
+    <button id="themeBtn" class="iconbtn" aria-label="Toggle theme">☾</button>
+  </header>
+
+  <aside id="drawer" class="drawer" aria-label="Site navigation">
+    <div class="drawer__head">
+      <span class="logo">ml</span>
+      <div><div class="drawer__title">cb-ml</div><div class="drawer__sub">AI/ML · GenAI interview prep</div></div>
+    </div>
+    <nav id="drawerNav"></nav>
+  </aside>
+  <div id="scrim" class="scrim"></div>
+
+  <main id="main">
+    <span class="eyebrow">Part 1 · Foundations</span>
+    <h1>What is Machine Learning?</h1>
+    <p class="lede">
+      Before any specific model, one idea has to be crystal clear: <strong>machine learning is how a
+      computer learns a task from examples instead of being told the rules by hand.</strong> This page
+      builds the vocabulary the rest of the site leans on — the ways models learn, the words for the
+      data, the two phases (training and inference), and the full lifecycle from raw data to a
+      monitored production system.
+    </p>
+
+    <p class="prereq">
+      <b>Builds on</b> <span>nothing — start here.</span>
+      <b>Next</b> <a href="p1-classical-ml.html">Classical Machine Learning</a>
+    </p>
+
+    <div class="callout ladder">
+      <div class="callout__title">Where this sits on the ladder</div>
+      This page is the <strong>ground the whole ladder stands on</strong>. Every rung —
+      classical machine learning, deep learning, large language models — is a different <em>kind</em>
+      of the same thing: a function learned from data. Get these words right and every later page reads
+      as a variation on one theme.
+      <div class="chips">
+        <span class="chip">vocabulary for every rung</span>
+        <span class="chip cpu">concepts, no GPU needed</span>
+      </div>
+    </div>
+
+    <div class="keyterms" aria-label="Key terms on this page">
+      <div class="keyterms__title">Key terms on this page</div>
+      <dl>
+        <div><dt>Machine Learning <span class="abbr">(ML)</span></dt><dd>Learning a task from data/examples rather than hand-written rules.</dd></div>
+        <div><dt>Artificial Intelligence <span class="abbr">(AI)</span></dt><dd>The broad field of making machines act intelligently; ML is the sub-field that learns from data.</dd></div>
+        <div><dt>Feature</dt><dd>An input variable the model reads (a column, a pixel, a token).</dd></div>
+        <div><dt>Label</dt><dd>The known answer for an example, used to teach a supervised model.</dd></div>
+        <div><dt>Training</dt><dd>The phase where the model adjusts its parameters to fit the data.</dd></div>
+        <div><dt>Inference</dt><dd>Using the trained model to make predictions on new inputs.</dd></div>
+        <div><dt>Parameter</dt><dd>A value the model <em>learns</em> during training (e.g. a weight).</dd></div>
+        <div><dt>Hyperparameter</dt><dd>A value <em>you</em> set before training (e.g. learning rate, tree depth).</dd></div>
+        <div><dt>Reinforcement Learning <span class="abbr">(RL)</span></dt><dd>Learning by trial and error from rewards, not labelled examples.</dd></div>
+        <div><dt>Generalization</dt><dd>How well a model performs on data it has never seen.</dd></div>
+      </dl>
+    </div>
+
+    <nav class="toc" aria-label="On this page">
+      <div class="toc__title">On this page</div>
+      <ol>
+        <li><a href="#definition">What machine learning actually is</a></li>
+        <li><a href="#paradigms">The four ways a model can learn</a></li>
+        <li><a href="#vocabulary">Features, labels &amp; the data split</a></li>
+        <li><a href="#trainvsinfer">Training vs inference</a></li>
+        <li><a href="#params">Parameters vs hyperparameters</a></li>
+        <li><a href="#lifecycle">The machine-learning lifecycle</a></li>
+        <li><a href="#qa">Interview Q&amp;A</a></li>
+        <li><a href="#code">Code: a whole ML project in 20 lines</a></li>
+      </ol>
+    </nav>
+
+    <!-- ===== Definition ===== -->
+    <h2 id="definition">What machine learning actually is</h2>
+    <div class="callout def">
+      <div class="callout__title">What it is</div>
+      <p>
+        <strong>Machine Learning (ML) is a way of writing programs by example.</strong> Instead of a
+        human spelling out every rule, you show the computer many examples of a task, and an algorithm
+        finds the pattern — a <em>function</em> that maps inputs to outputs — on its own.
+      </p>
+    </div>
+    <p>
+      Contrast the two styles. In <strong>traditional programming</strong> you write the rules and the
+      computer applies them: <code>if income &gt; X and age &lt; Y then approve</code>. In
+      <strong>machine learning</strong> you supply the examples (thousands of past decisions) and the
+      computer <em>writes the rule for you</em>, expressed as a set of numbers called
+      <strong>parameters</strong>. You bring the data and the goal; the algorithm brings the rule.
+    </p>
+    <p>
+      That flip is powerful exactly when the rules are too messy to write by hand. Nobody can write an
+      <code>if/else</code> that recognises a cat in a photo or judges the sentiment of a sentence — but
+      given enough labelled examples, a model can learn to. Machine learning is a subset of
+      <strong>Artificial Intelligence (AI)</strong>; <strong>deep learning</strong> is in turn a subset
+      of machine learning that uses many-layered neural networks.
+    </p>
+    <div class="callout deeper">
+      <div class="callout__title">Bottom line</div>
+      Reach for ML only when a plain algorithm can’t state the rule. If the rule <em>is</em> stateable
+      and stable, hand-written code is cheaper, faster, and easier to debug — that’s rung 1 of the
+      escalation ladder, and it beats a model every time it applies.
+    </div>
+
+    <!-- ===== Paradigms ===== -->
+    <h2 id="paradigms">The four ways a model can learn</h2>
+    <div class="callout def">
+      <div class="callout__title">What it is</div>
+      <p>
+        A <strong>learning paradigm</strong> is the <em>kind of feedback</em> a model learns from.
+        There are four you should be able to name and tell apart: supervised, unsupervised,
+        self-supervised, and reinforcement learning.
+      </p>
+    </div>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>Paradigm</th><th>Learns from</th><th>Answers the question</th><th>Everyday example</th></tr></thead>
+        <tbody>
+          <tr><td><strong>Supervised</strong></td><td>Labelled examples (input → known answer)</td><td>“What is the answer for this input?”</td><td>Spam vs not-spam, house-price prediction</td></tr>
+          <tr><td><strong>Unsupervised</strong></td><td>Unlabelled data (structure only)</td><td>“What natural groups or patterns exist?”</td><td>Customer segmentation, anomaly detection</td></tr>
+          <tr><td><strong>Self-supervised</strong></td><td>Data that labels itself (predict a hidden part)</td><td>“What’s missing / what comes next?”</td><td>How Large Language Models pre-train (predict the next word)</td></tr>
+          <tr><td><strong>Reinforcement (RL)</strong></td><td>Rewards from trial and error</td><td>“Which action maximises long-run reward?”</td><td>Game-playing, robot control, tuning chatbots</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>
+      <strong>Supervised learning</strong> is the workhorse of business ML: you have a column you want
+      to predict (the <em>label</em>) and history to learn from. <strong>Unsupervised learning</strong>
+      finds structure when you have no labels — clusters of similar customers, or points that don’t fit
+      any cluster (anomalies). <strong>Self-supervised learning</strong> is the trick that made modern
+      Generative AI possible: the data provides its own labels (“predict the next token”), so a model
+      can learn from the entire internet without anyone hand-labelling it. <strong>Reinforcement
+      learning</strong> learns by acting and receiving a reward signal — the same idea behind aligning
+      chatbots to human preferences.
+    </p>
+    <div class="callout deeper">
+      <div class="callout__title">Bottom line</div>
+      Match the paradigm to the feedback you actually have. Labels → supervised. No labels but you want
+      structure → unsupervised. A giant unlabelled corpus → self-supervised pre-training. A system that
+      acts and gets scored → reinforcement learning.
+    </div>
+
+    <!-- ===== Vocabulary ===== -->
+    <h2 id="vocabulary">Features, labels &amp; the data split</h2>
+    <div class="callout def">
+      <div class="callout__title">What it is</div>
+      <p>
+        A <strong>feature</strong> is an input the model reads; a <strong>label</strong> is the answer
+        it’s trying to predict; and the <strong>data split</strong> is how you carve your dataset into
+        separate slices for <em>training</em>, <em>tuning</em>, and <em>honest testing</em>.
+      </p>
+    </div>
+    <p>
+      Picture a spreadsheet. Each <strong>row</strong> is one example. Most columns are
+      <strong>features</strong> (age, income, last-login) — the evidence. One column is the
+      <strong>label</strong> (did-they-churn?) — the answer you want to predict. A supervised model
+      learns the relationship <em>features → label</em>.
+    </p>
+    <p>
+      The catch: a model that has simply <em>memorised</em> the training rows looks perfect on them and
+      fails on anything new. To catch that, you split the data into three disjoint slices:
+    </p>
+    <ul>
+      <li><strong>Training set</strong> — the examples the model learns from.</li>
+      <li><strong>Validation set</strong> — held-out data you use to tune choices (which model, which
+        hyperparameters) without peeking at the final exam.</li>
+      <li><strong>Test set</strong> — locked away until the very end, used once to estimate how the model
+        will do on genuinely unseen data.</li>
+    </ul>
+    <p>
+      The whole point is <strong>generalization</strong>: performance on data the model never saw during
+      training. A model that scores 99% on the training set but 70% on the test set is
+      <strong>overfitting</strong> — memorising instead of learning. (The full treatment of over- and
+      under-fitting, the bias–variance trade-off, and data leakage lives in Part 3 →
+      <a href="p3-fitting-generalization.html">Fitting &amp; Generalization</a>.)
+    </p>
+    <div class="callout warn">
+      <div class="callout__title">The number-one rookie mistake</div>
+      Never let information from the test set touch training — not through scaling stats, not through
+      feature selection, not through a duplicated row. That’s <strong>data leakage</strong>, and it
+      produces a model that dazzles in the notebook and collapses in production.
+    </div>
+
+    <!-- ===== Training vs inference ===== -->
+    <h2 id="trainvsinfer">Training vs inference</h2>
+    <div class="callout def">
+      <div class="callout__title">What it is</div>
+      <p>
+        <strong>Training</strong> is the one-time (or periodic) phase where the model <em>learns</em> its
+        parameters from data. <strong>Inference</strong> is every time afterward that you <em>use</em> the
+        trained model to make a prediction on a new input.
+      </p>
+    </div>
+    <p>
+      They have completely different cost profiles, and conflating them is a classic interview slip.
+      <strong>Training</strong> is expensive and bursty: it chews through the whole dataset many times,
+      often on a Graphics Processing Unit (GPU), and you do it relatively rarely. <strong>Inference</strong>
+      is cheap-per-call but constant: it runs on every request in production, so its
+      <em>latency</em> and <em>per-call cost</em> are what your users and your bill actually feel.
+    </p>
+
+    <div class="figure">
+      <svg viewBox="0 0 460 200" role="img" aria-label="Two phases: training learns parameters from data; inference uses the model on new inputs">
+        <!-- Training panel -->
+        <text x="115" y="20" text-anchor="middle" font-size="12" fill="var(--good,#3fb950)" font-weight="700">TRAINING — learn the rule (rare, costly)</text>
+        <g font-family="monospace" font-size="11" text-anchor="middle">
+          <rect x="24" y="42" width="80" height="34" rx="8" fill="var(--surface-2,#1c2333)" stroke="var(--border,#3a4457)"/><text x="64" y="63" fill="var(--text,#e6edf3)">labelled data</text>
+          <rect x="150" y="42" width="70" height="34" rx="8" fill="var(--accent-soft,#2b2f55)" stroke="#7c8cff" stroke-width="2" class="anim-pulse"/><text x="185" y="63" fill="#7c8cff" font-weight="700">algorithm</text>
+        </g>
+        <g stroke="var(--good,#3fb950)" fill="none" class="anim-flow"><path d="M104,59 L150,59"/></g>
+        <text x="115" y="96" text-anchor="middle" font-size="10" fill="var(--text-muted,#9aa7b8)">adjusts parameters to fit examples ↺</text>
+
+        <!-- Inference panel -->
+        <text x="345" y="20" text-anchor="middle" font-size="12" fill="var(--accent-2,#38bdf8)" font-weight="700">INFERENCE — use the rule (every request)</text>
+        <g font-family="monospace" font-size="11" text-anchor="middle">
+          <rect x="256" y="42" width="72" height="34" rx="8" fill="var(--surface-2,#1c2333)" stroke="var(--border,#3a4457)"/><text x="292" y="63" fill="var(--text,#e6edf3)">new input</text>
+          <rect x="374" y="42" width="66" height="34" rx="8" fill="var(--surface-2,#1c2333)" stroke="#3fb950"/><text x="407" y="63" fill="#3fb950">prediction</text>
+        </g>
+        <g stroke="var(--accent-2,#38bdf8)" fill="none" class="anim-flow"><path d="M328,59 L374,59"/></g>
+
+        <!-- the trained model bridges the two -->
+        <rect x="150" y="128" width="160" height="40" rx="10" fill="var(--accent-soft,#2b2f55)" stroke="#7c8cff" stroke-width="2"/>
+        <text x="230" y="153" text-anchor="middle" font-size="12" fill="#7c8cff" font-weight="700" font-family="monospace">trained model (frozen)</text>
+        <path d="M185,80 C185,110 210,118 220,126" fill="none" stroke="var(--good,#3fb950)" stroke-width="1.5" marker-end="url(#ar)"/>
+        <path d="M292,126 C280,116 255,110 245,100" fill="none" stroke="var(--accent-2,#38bdf8)" stroke-width="1.5" marker-end="url(#ar)"/>
+        <defs><marker id="ar" markerWidth="9" markerHeight="9" refX="5" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#9aa7b8"/></marker></defs>
+        <text x="230" y="188" text-anchor="middle" font-size="10" fill="var(--text-muted,#9aa7b8)">train once → serve the same frozen model on millions of requests</text>
+      </svg>
+      <div class="figure__cap">Training <em>produces</em> the model (learns the parameters); inference <em>consumes</em> it. Different frequency, different cost, different hardware needs.</div>
+    </div>
+    <div class="callout deeper">
+      <div class="callout__title">Bottom line</div>
+      When someone says “the model is expensive,” ask <em>which phase</em>. Training cost is a one-off
+      capital expense; inference cost is a per-request operating expense that scales with traffic — and
+      it’s usually the one that decides whether a project is viable.
+    </div>
+
+    <!-- ===== Parameters vs hyperparameters ===== -->
+    <h2 id="params">Parameters vs hyperparameters</h2>
+    <div class="callout def">
+      <div class="callout__title">What it is</div>
+      <p>
+        A <strong>parameter</strong> is a value the model <em>learns</em> from data during training. A
+        <strong>hyperparameter</strong> is a value <em>you choose</em> before training that controls
+        <em>how</em> the learning happens.
+      </p>
+    </div>
+    <p>
+      The line is “who sets it.” The model sets its <strong>parameters</strong> — the weights of a neural
+      network, the split thresholds of a tree. A large language model has billions of them (that’s what
+      “7B” means: seven billion learned parameters). <strong>Hyperparameters</strong> are your dials:
+      the learning rate, the number of trees, the network depth, how long to train. You tune them
+      against the <em>validation</em> set, because they’re choices <em>about</em> the model rather than
+      things the model discovers.
+    </p>
+    <div class="callout deeper">
+      <div class="callout__title">Bottom line</div>
+      Parameters are learned; hyperparameters are chosen. When you “train” you’re fitting parameters;
+      when you “tune” you’re searching hyperparameters. Keep the two words straight and a lot of ML
+      conversation snaps into focus.
+    </div>
+
+    <!-- ===== Lifecycle ===== -->
+    <h2 id="lifecycle">The machine-learning lifecycle</h2>
+    <div class="callout def">
+      <div class="callout__title">What it is</div>
+      <p>
+        The <strong>ML lifecycle</strong> is the end-to-end path a real project follows —
+        <strong>data → features → train → evaluate → deploy → monitor</strong> — and, crucially, it’s a
+        <em>loop</em>: monitoring feeds new data back into the next round.
+      </p>
+    </div>
+    <p>
+      Modelling is only one box in a much longer chain, and in practice it’s rarely where the time goes.
+      Getting and cleaning the <strong>data</strong>, engineering the <strong>features</strong>, and —
+      once live — <strong>monitoring</strong> for drift usually dwarf the training step. Here is the
+      whole loop:
+    </p>
+
+    <div class="figure">
+      <svg viewBox="0 0 460 170" role="img" aria-label="The ML lifecycle as a loop: data, features, train, evaluate, deploy, monitor, feeding back to data">
+        <defs><marker id="lc" markerWidth="9" markerHeight="9" refX="5" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#7c8cff"/></marker></defs>
+        <g font-family="monospace" font-size="10.5" text-anchor="middle">
+          <!-- top row L→R -->
+          <g style="animation:fadeSlide .5s ease both"><rect x="16"  y="30" width="76" height="34" rx="8" fill="var(--surface-2,#1c2333)" stroke="#38bdf8"/><text x="54"  y="51" fill="#38bdf8">1 · data</text></g>
+          <g style="animation:fadeSlide .5s ease .1s both"><rect x="128" y="30" width="80" height="34" rx="8" fill="var(--surface-2,#1c2333)" stroke="#38bdf8"/><text x="168" y="51" fill="#38bdf8">2 · features</text></g>
+          <g style="animation:fadeSlide .5s ease .2s both"><rect x="244" y="30" width="76" height="34" rx="8" fill="var(--accent-soft,#2b2f55)" stroke="#7c8cff" stroke-width="2"/><text x="282" y="51" fill="#7c8cff" font-weight="700">3 · train</text></g>
+          <g style="animation:fadeSlide .5s ease .3s both"><rect x="356" y="30" width="88" height="34" rx="8" fill="var(--surface-2,#1c2333)" stroke="#38bdf8"/><text x="400" y="51" fill="#38bdf8">4 · evaluate</text></g>
+          <!-- bottom row R→L -->
+          <g style="animation:fadeSlide .5s ease .4s both"><rect x="356" y="112" width="88" height="34" rx="8" fill="var(--surface-2,#1c2333)" stroke="#3fb950"/><text x="400" y="133" fill="#3fb950">5 · deploy</text></g>
+          <g style="animation:fadeSlide .5s ease .5s both"><rect x="244" y="112" width="88" height="34" rx="8" fill="var(--surface-2,#1c2333)" stroke="#3fb950"/><text x="288" y="133" fill="#3fb950">6 · monitor</text></g>
+        </g>
+        <!-- arrows along the path -->
+        <g stroke="#7c8cff" fill="none" class="anim-flow">
+          <path d="M92,47 L128,47" marker-end="url(#lc)"/>
+          <path d="M208,47 L244,47" marker-end="url(#lc)"/>
+          <path d="M320,47 L356,47" marker-end="url(#lc)"/>
+          <path d="M400,64 L400,112" marker-end="url(#lc)"/>
+          <path d="M356,129 L332,129" marker-end="url(#lc)"/>
+        </g>
+        <!-- feedback loop: monitor -> data -->
+        <path d="M244,129 C120,129 54,110 54,64" fill="none" stroke="#3fb950" stroke-width="1.6" stroke-dasharray="5 4" marker-end="url(#lc)"/>
+        <text x="120" y="100" font-size="10" fill="#3fb950">new data &amp; drift feed the next round ↺</text>
+      </svg>
+      <div class="figure__cap">The lifecycle is a loop, not a line. Deploy &amp; monitor (rung-4 territory) are covered in Part 4 → <a href="p4-mlops-production.html">MLOps &amp; Production</a>.</div>
+    </div>
+    <div class="callout deeper">
+      <div class="callout__title">Bottom line</div>
+      “Build a model” is one step of six. The senior instinct is to think about the <em>whole loop</em> —
+      where the data comes from, how you’ll know it’s working in production, and how it stays healthy —
+      not just the fit.
+    </div>
+
+    <!-- ===== Q&A ===== -->
+    <h2 id="qa">Interview Q&amp;A</h2>
+
+    <details class="qa">
+      <summary class="qa__q"><span class="badge core">core</span>In one sentence, how is machine learning different from traditional programming?</summary>
+      <div class="qa__a">
+        <p>
+          In traditional programming a human writes the rules and the computer applies them; in machine
+          learning you provide examples and the computer <em>infers</em> the rules itself, as learned
+          parameters. You use ML precisely when the rules are too complex or fuzzy to write by hand.
+        </p>
+      </div>
+    </details>
+
+    <details class="qa">
+      <summary class="qa__q"><span class="badge core">core</span>Supervised vs unsupervised vs self-supervised — give an example of each.</summary>
+      <div class="qa__a">
+        <p>
+          Supervised learns from labelled pairs (input → answer): e.g. spam classification. Unsupervised
+          finds structure in unlabelled data: e.g. clustering customers into segments. Self-supervised
+          creates labels from the data itself by hiding part of it: e.g. a language model predicting the
+          next token, which is how LLMs pre-train on unlabelled text at internet scale.
+        </p>
+      </div>
+    </details>
+
+    <details class="qa">
+      <summary class="qa__q"><span class="badge trap">trap</span>Why do we need a separate validation <em>and</em> test set — isn’t one hold-out enough?</summary>
+      <div class="qa__a">
+        <p>
+          Because you make decisions against the validation set (model choice, hyperparameters), you
+          slowly “leak” it into your process — the model becomes indirectly fitted to it. The test set is
+          touched <em>once</em>, at the end, to get an honest estimate of unseen performance. Without that
+          separation you’ll be optimistic about how the model will actually do in production.
+        </p>
+      </div>
+    </details>
+
+    <details class="qa">
+      <summary class="qa__q"><span class="badge core">core</span>Parameter vs hyperparameter?</summary>
+      <div class="qa__a">
+        <p>
+          A parameter is learned by the model during training (a weight, a tree threshold). A
+          hyperparameter is set by you before training and controls the learning process (learning rate,
+          number of trees, network depth). You fit parameters on the training set and tune
+          hyperparameters against the validation set.
+        </p>
+      </div>
+    </details>
+
+    <details class="qa">
+      <summary class="qa__q"><span class="badge senior">senior</span>Where does most of the effort go in a real ML project?</summary>
+      <div class="qa__a">
+        <p>
+          Rarely in the model itself. Sourcing and cleaning data, engineering features, building a
+          trustworthy evaluation, and — once deployed — monitoring for drift and retraining consume the
+          bulk of the time. The lifecycle is a loop (data → features → train → evaluate → deploy →
+          monitor → back to data), and treating modelling as the whole job is a red flag.
+        </p>
+      </div>
+    </details>
+
+    <details class="qa">
+      <summary class="qa__q"><span class="badge trap">trap</span>Your model scores 99% in training but 72% on the test set. What’s happening?</summary>
+      <div class="qa__a">
+        <p>
+          That gap is <strong>overfitting</strong> — the model memorised the training data instead of
+          learning a pattern that generalises. Fixes include simplifying the model, adding
+          regularization, getting more/represen­tative data, and checking for leakage. The detailed
+          treatment is in Part 3 → <a href="p3-fitting-generalization.html">Fitting &amp; Generalization</a>.
+        </p>
+      </div>
+    </details>
+
+    <!-- ===== Code ===== -->
+    <h2 id="code">Code: a whole ML project in 20 lines</h2>
+    <p>
+      Every term on this page — features, labels, the split, training, inference, evaluation — shows up
+      in one tiny scikit-learn script. This is the lifecycle in miniature.
+    </p>
+
+    <div class="codewrap">
+      <div class="codewrap__bar"><span class="codewrap__lang">python</span><span>the ML lifecycle in miniature (scikit-learn)</span><button class="copybtn" type="button">Copy</button></div>
+<pre><code class="language-python"># A complete supervised-learning project, start to finish, on a CPU in seconds.
+# It touches every term from this page: features, labels, split, train, infer, evaluate.
+from sklearn.datasets import load_breast_cancer
+from sklearn.model_selection import train_test_split
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.metrics import accuracy_score
+
+# 1) DATA: features X (the evidence) and labels y (the answer we want to predict).
+data = load_breast_cancer()
+X, y = data.data, data.target          # X: (569, 30) features   y: 0/1 label per row
+
+# 2) SPLIT: keep a test set the model never learns from (honest generalization check).
+X_train, X_test, y_train, y_test = train_test_split(
+    X, y, test_size=0.2, random_state=0, stratify=y
+)
+
+# 3) CHOOSE a model. n_estimators is a HYPERPARAMETER — we set it, the model doesn't.
+model = RandomForestClassifier(n_estimators=200, random_state=0)
+
+# 4) TRAIN: the model LEARNS its PARAMETERS (the trees) from the training data.
+model.fit(X_train, y_train)
+
+# 5) INFER: use the frozen, trained model to predict on data it has never seen.
+preds = model.predict(X_test)
+
+# 6) EVALUATE: how well did it GENERALIZE? (compare predictions to the held-out truth)
+print(f"test accuracy: {accuracy_score(y_test, preds):.3f}")
+# Next step in a real project (Part 4): deploy this model and MONITOR it in production.
+</code></pre>
+    </div>
+
+    <div class="callout">
+      <div class="callout__title">Where to go next</div>
+      You now have the vocabulary. The next page puts it to work on the cheapest rung that solves most
+      real problems: <a href="p1-classical-ml.html">Classical Machine Learning</a> — the baselines that
+      still beat deep learning on tabular data.
+    </div>
+
+    <nav class="pagenav" id="pageNav" aria-label="Page navigation"></nav>
+
+    <div class="sitefoot">cb-ml · Part 1 · Foundations &amp; Concepts</div>
+  </main>
+</body>
+</html>

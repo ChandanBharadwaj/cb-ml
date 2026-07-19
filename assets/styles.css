@@ -204,6 +204,38 @@ hr { border: none; border-top: 1px solid var(--border); margin: 2.4em 0; }
 .callout.warn   { border-left-color: var(--warn); }   .callout.warn .callout__title   { color: var(--warn); }
 .callout.ladder { border-left-color: var(--good); }   .callout.ladder .callout__title { color: var(--good); }
 
+/* "What it is" definition opener — leads every subtopic. Distinct green rule +
+   a subtle tint so the plain-language definition reads as the entry point. */
+.callout.def {
+  border-left-color: var(--good);
+  background: color-mix(in srgb, var(--good) 9%, var(--surface-2));
+}
+.callout.def .callout__title { color: var(--good); }
+.callout.def p:last-child { margin-bottom: 0; }
+
+/* "Builds on … · Next …" prerequisite strip under the h1/lede. */
+.prereq {
+  display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: baseline;
+  font-size: .82rem; color: var(--text-muted); margin: 4px 0 4px;
+}
+.prereq b { color: var(--text); font-weight: 700; text-transform: uppercase; letter-spacing: .05em; font-size: .7rem; }
+.prereq span { color: var(--text-faint); }
+
+/* =============================================================================
+   Key terms — per-page glossary box (full names for every abbreviation)
+   ========================================================================== */
+.keyterms {
+  background: var(--bg-elevated); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 14px 16px; margin: 16px 0;
+}
+.keyterms__title { font-size: .72rem; text-transform: uppercase; letter-spacing: .08em; color: var(--accent); font-weight: 800; margin-bottom: 8px; }
+.keyterms dl { margin: 0; display: grid; grid-template-columns: 1fr; gap: 8px 16px; }
+@media (min-width: 640px){ .keyterms dl { grid-template-columns: 1fr 1fr; } }
+.keyterms div { display: block; }
+.keyterms dt { font-weight: 700; color: var(--text); font-size: .9rem; }
+.keyterms dt .abbr { color: var(--accent); font-family: var(--font-mono); font-size: .85rem; }
+.keyterms dd { margin: 1px 0 0; font-size: .84rem; color: var(--text-muted); line-height: 1.5; }
+
 /* compute / cost chips used inside "where it sits on the ladder" callouts */
 .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
 .chip {

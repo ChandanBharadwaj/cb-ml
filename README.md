@@ -20,7 +20,7 @@ Once GitHub Pages is enabled, it's here:
 
 ## What's inside
 
-- **Part 1 · Foundations** — ML &amp; Deep Learning · Transformers &amp; NLP · GenAI/LLM/SLM
+- **Part 1 · Foundations** — What is ML? · Classical ML · Neural Networks &amp; Deep Learning · Tokenization, Embeddings &amp; NLP · Transformers &amp; Self-Attention · GenAI, LLMs &amp; SLMs
 - **Part 2 · Building with LLMs** — Prompt Engineering · RAG · Vector DBs &amp; Embeddings · Agents
 - **Part 3 · Train · Tune · Optimize · Evaluate** — Fine-tuning · Inference Optimization · Fitting &amp; Generalization · Metrics &amp; Evaluation
 - **Part 4 · Production &amp; Problem-Solving** — MLOps &amp; Production · When to Use ML (the ladder) · Problem → Solution · Multimodal

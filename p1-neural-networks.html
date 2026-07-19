@@ -1,0 +1,435 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Neural Networks &amp; Deep Learning · cb-ml</title>
+  <meta name="description" content="From a single artificial neuron to a deep network: the forward pass, backpropagation, gradient descent, activations, losses and optimizers — plus the judgment for when deep learning is worth the GPU over classical ML.">
+  <script>(function(){try{var t=localStorage.getItem('cbml-theme');if(t)document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+  <link rel="stylesheet" href="assets/styles.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+  <script defer src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+  <script defer src="assets/app.js"></script>
+</head>
+<body>
+  <a class="skip" href="#main">Skip to content</a>
+
+  <header class="topbar">
+    <button id="menuBtn" class="iconbtn" aria-label="Open navigation" aria-expanded="false">☰</button>
+    <a class="topbar__brand" href="index.html"><span class="logo">ml</span> cb-ml</a>
+    <span class="topbar__spacer"></span>
+    <button id="themeBtn" class="iconbtn" aria-label="Toggle theme">☾</button>
+  </header>
+
+  <aside id="drawer" class="drawer" aria-label="Site navigation">
+    <div class="drawer__head">
+      <span class="logo">ml</span>
+      <div><div class="drawer__title">cb-ml</div><div class="drawer__sub">AI/ML · GenAI interview prep</div></div>
+    </div>
+    <nav id="drawerNav"></nav>
+  </aside>
+  <div id="scrim" class="scrim"></div>
+
+  <main id="main">
+    <span class="eyebrow">Part 1 · Foundations</span>
+    <h1>Neural Networks &amp; Deep Learning</h1>
+    <p class="lede">
+      The rung above classical machine learning. A neural network is a function that <em>learns its own
+      features</em> — which is what makes it powerful on images, audio, and text, and overkill on a
+      spreadsheet. This page builds one from a single neuron and derives exactly how it trains: the
+      forward pass, backpropagation, and gradient descent.
+    </p>
+
+    <p class="prereq">
+      <b>Builds on</b> <a href="p1-classical-ml.html">Classical Machine Learning</a>
+      <b>Next</b> <a href="p1-tokenization-embeddings.html">Tokenization, Embeddings &amp; NLP</a>
+    </p>
+
+    <div class="callout ladder">
+      <div class="callout__title">Where this sits on the ladder</div>
+      <strong>Rung 3.</strong> Deep learning is what you climb to for <strong>unstructured</strong> data
+      (images, audio, text) or when classical machine learning plateaus. It learns features automatically
+      but wants a Graphics Processing Unit (GPU) to train and hungers for labelled data.
+      <div class="chips">
+        <span class="chip gpu">GPU to train</span>
+        <span class="chip cost">$$</span>
+        <span class="chip">unstructured data</span>
+      </div>
+    </div>
+
+    <div class="keyterms" aria-label="Key terms on this page">
+      <div class="keyterms__title">Key terms on this page</div>
+      <dl>
+        <div><dt>Deep Learning <span class="abbr">(DL)</span></dt><dd>Machine learning with many-layered neural networks that learn their own features.</dd></div>
+        <div><dt>Multi-Layer Perceptron <span class="abbr">(MLP)</span></dt><dd>The basic fully-connected neural network: input → hidden layers → output.</dd></div>
+        <div><dt>Forward pass</dt><dd>Running inputs through the network to produce a prediction.</dd></div>
+        <div><dt>Backpropagation</dt><dd>The chain rule run backwards to get each weight’s gradient.</dd></div>
+        <div><dt>Gradient descent</dt><dd>Nudging weights downhill on the loss surface to reduce error.</dd></div>
+        <div><dt>ReLU</dt><dd>Rectified Linear Unit — the activation <code>max(0, x)</code>.</dd></div>
+        <div><dt>SGD</dt><dd>Stochastic Gradient Descent — updating weights on mini-batches of data.</dd></div>
+        <div><dt>Loss</dt><dd>A number measuring how wrong a prediction is; training minimises it.</dd></div>
+      </dl>
+    </div>
+
+    <nav class="toc" aria-label="On this page">
+      <div class="toc__title">On this page</div>
+      <ol>
+        <li><a href="#what">What deep learning is</a></li>
+        <li><a href="#neuron">From neuron to network</a></li>
+        <li><a href="#forward">The forward pass</a></li>
+        <li><a href="#backprop">Backpropagation &amp; gradient descent</a></li>
+        <li><a href="#optim">Activations, losses &amp; optimizers</a></li>
+        <li><a href="#whichwins">Classical ML vs deep learning</a></li>
+        <li><a href="#qa">Interview Q&amp;A</a></li>
+        <li><a href="#code">Code: a neural net with a hand-written training loop</a></li>
+      </ol>
+    </nav>
+
+    <!-- ===== What ===== -->
+    <h2 id="what">What deep learning is</h2>
+    <div class="callout def">
+      <div class="callout__title">What it is</div>
+      <p>
+        <strong>Deep learning is machine learning with neural networks that have many layers, learning
+        their own features from raw data.</strong> “Deep” just means “many layers stacked” — and depth is
+        what lets the network build up from edges to shapes to objects, or from letters to words to
+        meaning, with no human feature engineering.
+      </p>
+    </div>
+    <p>
+      This is the key contrast with the previous page. Classical machine learning needs <em>you</em> to
+      hand it good features; a deep network <strong>learns the features itself</strong> from the raw
+      pixels, waveform, or tokens. That’s a superpower for unstructured data where the right features are
+      impossible to state by hand — and usually wasted effort on a tidy spreadsheet, where a
+      gradient-boosted tree already wins. The price of that superpower is data and compute: deep learning
+      wants lots of labelled examples and a GPU to train.
+    </p>
+    <div class="callout deeper">
+      <div class="callout__title">Bottom line</div>
+      Deep learning trades interpretability and cheap CPU training for the ability to learn features from
+      raw, unstructured data. Climb here when that trade actually pays — not by default.
+    </div>
+
+    <!-- ===== Neuron ===== -->
+    <h2 id="neuron">From neuron to network</h2>
+    <div class="callout def">
+      <div class="callout__title">What it is</div>
+      <p>
+        An <strong>artificial neuron</strong> is a tiny function: <strong>weighted sum → add a bias →
+        apply a non-linear activation</strong>, written <code>a = σ(w·x + b)</code>. Stack neurons into
+        layers and layers into a network — a <strong>Multi-Layer Perceptron (MLP)</strong> — and you get
+        a function that can approximate almost anything.
+      </p>
+    </div>
+    <p>
+      Each neuron multiplies its inputs by learned <strong>weights</strong>, adds a <strong>bias</strong>,
+      and passes the result through an <strong>activation</strong> <code>σ</code> that bends the line into
+      a curve. One neuron is a glorified logistic regression; the magic is in <em>composition</em>. Wire
+      many together across layers and the network gains the <strong>universal approximation</strong>
+      property — enough capacity to represent essentially any continuous function. The catch: that’s an
+      <em>existence</em> guarantee. It says nothing about how much data or compute you need to actually
+      <em>find</em> those weights, which is where training comes in.
+    </p>
+
+    <div class="figure">
+      <svg viewBox="0 0 400 220" role="img" aria-label="A small neural network: input layer, hidden layer, output layer with connections">
+        <g stroke="#7c8cff" stroke-width="1" opacity="0.5" class="anim-flow" fill="none">
+          <line x1="70" y1="60" x2="200" y2="45"/><line x1="70" y1="60" x2="200" y2="110"/><line x1="70" y1="60" x2="200" y2="175"/>
+          <line x1="70" y1="160" x2="200" y2="45"/><line x1="70" y1="160" x2="200" y2="110"/><line x1="70" y1="160" x2="200" y2="175"/>
+          <line x1="200" y1="45" x2="330" y2="80"/><line x1="200" y1="45" x2="330" y2="140"/>
+          <line x1="200" y1="110" x2="330" y2="80"/><line x1="200" y1="110" x2="330" y2="140"/>
+          <line x1="200" y1="175" x2="330" y2="80"/><line x1="200" y1="175" x2="330" y2="140"/>
+        </g>
+        <g>
+          <circle cx="70" cy="60" r="14" fill="var(--surface-2,#1c2333)" stroke="#38bdf8" stroke-width="2" class="anim-pulse"/>
+          <circle cx="70" cy="160" r="14" fill="var(--surface-2,#1c2333)" stroke="#38bdf8" stroke-width="2" class="anim-pulse" style="animation-delay:.4s"/>
+          <circle cx="200" cy="45" r="14" fill="var(--surface-2,#1c2333)" stroke="#7c8cff" stroke-width="2" class="anim-pulse" style="animation-delay:.2s"/>
+          <circle cx="200" cy="110" r="14" fill="var(--surface-2,#1c2333)" stroke="#7c8cff" stroke-width="2" class="anim-pulse" style="animation-delay:.6s"/>
+          <circle cx="200" cy="175" r="14" fill="var(--surface-2,#1c2333)" stroke="#7c8cff" stroke-width="2" class="anim-pulse" style="animation-delay:.8s"/>
+          <circle cx="330" cy="80" r="14" fill="var(--surface-2,#1c2333)" stroke="#3fb950" stroke-width="2" class="anim-pulse" style="animation-delay:.3s"/>
+          <circle cx="330" cy="140" r="14" fill="var(--surface-2,#1c2333)" stroke="#3fb950" stroke-width="2" class="anim-pulse" style="animation-delay:.7s"/>
+        </g>
+        <g font-size="11" text-anchor="middle" fill="var(--text-muted,#9aa7b8)">
+          <text x="70" y="205">input</text><text x="200" y="205">hidden</text><text x="330" y="205">output</text>
+        </g>
+      </svg>
+      <div class="figure__cap">Signal flows left → right (the forward pass). Every edge is a learned weight; every node applies an activation.</div>
+    </div>
+    <div class="callout deeper">
+      <div class="callout__title">Bottom line</div>
+      A network is just neurons composed across layers. Its power comes from depth and non-linearity; its
+      usefulness comes entirely from <em>training</em> the weights — which the rest of this page explains.
+    </div>
+
+    <!-- ===== Forward pass ===== -->
+    <h2 id="forward">The forward pass</h2>
+    <div class="callout def">
+      <div class="callout__title">What it is</div>
+      <p>
+        The <strong>forward pass</strong> is running an input through the network to get a prediction —
+        layer by layer, each one a matrix multiply followed by an activation.
+      </p>
+    </div>
+    <p>
+      For one layer: <code>h = σ(W·x + b)</code>, then that <code>h</code> becomes the input to the next
+      layer, and so on to the output. That’s all inference is. Because it’s dominated by big matrix
+      multiplications, a <strong>GPU</strong> — essentially a massive parallel multiply-add machine — runs
+      it orders of magnitude faster than a CPU. That single fact is why deep learning lives on the GPU
+      line of the ladder, and it’s the same operation that later powers transformer inference.
+    </p>
+    <div class="callout deeper">
+      <div class="callout__title">Bottom line</div>
+      The forward pass is “just matrix math.” Cheap per-layer, embarrassingly parallel, GPU-friendly —
+      and the exact computation you’ll optimise later for large-model inference.
+    </div>
+
+    <!-- ===== Backprop ===== -->
+    <h2 id="backprop">Backpropagation &amp; gradient descent</h2>
+    <div class="callout def">
+      <div class="callout__title">What it is</div>
+      <p>
+        <strong>Backpropagation</strong> is the chain rule of calculus run <em>backwards</em> through the
+        network to compute how much each weight contributed to the error. <strong>Gradient descent</strong>
+        is the follow-up step that nudges every weight a little in the direction that reduces the error.
+        Together they are how a network <em>learns</em>.
+      </p>
+    </div>
+    <p>Training answers one question, repeatedly: <em>how should I nudge each weight to reduce the loss?</em></p>
+    <ol>
+      <li><strong>Forward pass</strong> — compute the prediction and the <strong>loss</strong> (how wrong it is).</li>
+      <li><strong>Backward pass (backpropagation)</strong> — apply the chain rule from the loss back through every layer to get each weight’s <strong>gradient</strong> (its share of the blame), reusing intermediate results so it’s efficient.</li>
+      <li><strong>Update</strong> — step each weight a little downhill: <code>w ← w − η·∇w</code>, where <code>η</code> (eta) is the <strong>learning rate</strong>.</li>
+    </ol>
+    <p>
+      Repeat over many <strong>mini-batches</strong> and many passes through the data (<strong>epochs</strong>).
+      Gradient descent is literally “roll downhill on the loss surface,” and the learning rate sets your
+      step size.
+    </p>
+
+    <div class="figure">
+      <svg viewBox="0 0 400 200" role="img" aria-label="Gradient descent: a ball rolling down a loss curve to the minimum">
+        <path id="bowl" d="M40,40 C120,40 130,160 200,160 C270,160 280,40 360,40" fill="none" stroke="var(--border-strong,#3a4457)" stroke-width="2.5"/>
+        <text x="200" y="192" text-anchor="middle" font-size="11" fill="var(--text-muted,#9aa7b8)">weight value →</text>
+        <text x="20" y="100" font-size="11" fill="var(--text-muted,#9aa7b8)" transform="rotate(-90 20 100)" text-anchor="middle">loss</text>
+        <circle cx="200" cy="160" r="4" fill="#3fb950"/>
+        <text x="200" y="150" text-anchor="middle" font-size="10" fill="#3fb950">min</text>
+        <circle r="9" fill="#7c8cff">
+          <animateMotion dur="3s" repeatCount="indefinite" keyPoints="0;0.5;0.5" keyTimes="0;0.85;1" calcMode="spline" keySplines="0.4 0 0.2 1;0 0 1 1">
+            <mpath href="#bowl"/>
+          </animateMotion>
+        </circle>
+      </svg>
+      <div class="figure__cap">The ball (a weight) rolls down the loss surface toward the minimum. The learning rate sets its step size: too big and it overshoots; too small and it crawls.</div>
+    </div>
+    <div class="callout deeper">
+      <div class="callout__title">Bottom line</div>
+      Backprop assigns blame; gradient descent acts on it. Forward pass → loss → backward pass → update,
+      looped over the data, is the entire training algorithm behind every deep model — including
+      transformers.
+    </div>
+
+    <!-- ===== Optimizers ===== -->
+    <h2 id="optim">Activations, losses &amp; optimizers</h2>
+    <div class="callout def">
+      <div class="callout__title">What it is</div>
+      <p>
+        These are the three choices that shape training: the <strong>activation</strong> (the
+        non-linearity in each neuron), the <strong>loss</strong> (what “wrong” means), and the
+        <strong>optimizer</strong> (how gradients get turned into weight updates).
+      </p>
+    </div>
+    <ul>
+      <li><strong>Activation</strong> — the non-linearity that lets networks model curves, not just lines.
+        <strong>ReLU (Rectified Linear Unit)</strong>, <code>max(0, x)</code>, is the default hidden-layer
+        choice; <strong>GELU (Gaussian Error Linear Unit)</strong> / <strong>SiLU (Sigmoid Linear
+        Unit)</strong> in transformers; <strong>softmax</strong> on the output for multi-class
+        probabilities.</li>
+      <li><strong>Loss</strong> — what “wrong” means. <strong>Cross-entropy</strong> for classification,
+        <strong>MSE (Mean Squared Error)</strong> for regression. The loss is the thing backpropagation
+        differentiates.</li>
+      <li><strong>Optimizer</strong> — <em>how</em> you apply gradients. Plain <strong>SGD (Stochastic
+        Gradient Descent)</strong> works; <strong>Adam / AdamW</strong> adapt the step size per-parameter
+        and converge faster — the modern default, especially for transformers.</li>
+    </ul>
+    <div class="callout warn">
+      <div class="callout__title">Vanishing / exploding gradients</div>
+      Deep stacks can lose or blow up the gradient signal on the way back. The fixes you should name:
+      <strong>ReLU-family activations</strong>, <strong>residual connections</strong>, <strong>batch /
+      layer normalization</strong>, and careful weight initialization — several of which reappear inside
+      the <a href="p1-transformers.html">transformer block</a>.
+    </div>
+    <div class="callout deeper">
+      <div class="callout__title">Bottom line</div>
+      Activation adds the curve, loss defines the target, optimizer drives the descent. Sensible defaults:
+      ReLU (or GELU in transformers), cross-entropy or MSE, and AdamW.
+    </div>
+
+    <!-- ===== Which wins ===== -->
+    <h2 id="whichwins">Classical ML vs deep learning — the decision</h2>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>Signal</th><th>Reach for classical ML (rung 2)</th><th>Reach for deep learning (rung 3)</th></tr></thead>
+        <tbody>
+          <tr><td>Data type</td><td>Tabular / structured</td><td>Images, audio, text, video, signals</td></tr>
+          <tr><td>Data volume</td><td>Small–medium (thousands of rows)</td><td>Large (many thousands+ labelled examples)</td></tr>
+          <tr><td>Interpretability</td><td>Needed (regulated, stakeholder-facing)</td><td>Less critical</td></tr>
+          <tr><td>Compute</td><td>CPU, seconds, cheap</td><td>GPU, longer, costlier</td></tr>
+          <tr><td>Feature engineering</td><td>You provide features</td><td>Model learns features itself</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="callout ladder">
+      <div class="callout__title">Ladder rule</div>
+      A gradient-boosted-tree baseline is cheap insurance: if it already hits the target, you just saved a
+      GPU budget and a week. Climb to deep learning only when the baseline can’t reach the bar or the
+      signal genuinely lives in unstructured data — which is exactly where the next pages on transformers
+      and language models pick up.
+    </div>
+
+    <!-- ===== Q&A ===== -->
+    <h2 id="qa">Interview Q&amp;A</h2>
+
+    <details class="qa">
+      <summary class="qa__q"><span class="badge core">core</span>Explain backpropagation in one breath.</summary>
+      <div class="qa__a">
+        <p>
+          It’s the chain rule applied backwards through the network. After a forward pass computes the
+          loss, backprop propagates the derivative of the loss with respect to each weight from the output
+          layer back to the input, reusing intermediate results. Those gradients tell the optimizer which
+          direction and how much to nudge every weight.
+        </p>
+      </div>
+    </details>
+
+    <details class="qa">
+      <summary class="qa__q"><span class="badge trap">trap</span>Why do we need a non-linear activation at all?</summary>
+      <div class="qa__a">
+        <p>
+          Without one, stacking layers is pointless: a composition of linear maps is still a single linear
+          map, so a 50-layer network would have the exact same expressive power as one linear layer. The
+          non-linearity (ReLU, GELU…) is what lets the network model curved decision boundaries and complex
+          functions.
+        </p>
+      </div>
+    </details>
+
+    <details class="qa">
+      <summary class="qa__q"><span class="badge senior">senior</span>SGD vs Adam — when does the choice matter?</summary>
+      <div class="qa__a">
+        <p>
+          Adam adapts a per-parameter learning rate from running estimates of the gradient’s mean and
+          variance, so it converges fast with little tuning — the safe default, especially for transformers
+          (as AdamW). Well-tuned SGD with momentum can generalize slightly better on some vision tasks and
+          uses less memory. In practice: reach for AdamW first; consider SGD if you’re squeezing out the
+          last bit of generalization with a tuning budget.
+        </p>
+      </div>
+    </details>
+
+    <details class="qa">
+      <summary class="qa__q"><span class="badge core">core</span>When would you <em>not</em> use deep learning?</summary>
+      <div class="qa__a">
+        <p>
+          For tabular/structured data with modest volume, when I need interpretability, or when a CPU
+          budget matters — which covers a huge share of real business problems. Gradient-boosted trees
+          usually match or beat a neural net there, train in seconds, and are explainable. Deep learning
+          earns its cost on unstructured data (images, audio, language) or when classical models plateau.
+        </p>
+      </div>
+    </details>
+
+    <details class="qa">
+      <summary class="qa__q"><span class="badge senior">senior</span>What is the universal approximation theorem, and why doesn’t it mean “always use a neural net”?</summary>
+      <div class="qa__a">
+        <p>
+          It says a sufficiently wide network can approximate any continuous function to arbitrary
+          precision. But it’s an <em>existence</em> result — it says nothing about how much data, compute,
+          or tuning you need to actually <em>find</em> those weights, or whether the result generalizes. On
+          tabular data a boosted tree often reaches the same accuracy with a fraction of the cost, so “can
+          represent it” ≠ “is the right tool.”
+        </p>
+      </div>
+    </details>
+
+    <details class="qa">
+      <summary class="qa__q"><span class="badge trap">trap</span>What are vanishing gradients, and how do modern nets avoid them?</summary>
+      <div class="qa__a">
+        <p>
+          In a deep stack, repeatedly multiplying small derivatives during backprop can shrink the gradient
+          toward zero before it reaches the early layers, so they stop learning (or explode if the factors
+          are large). The standard fixes are ReLU-family activations, residual/skip connections, batch or
+          layer normalization, and careful initialization — the same ingredients that let transformers
+          stack dozens of layers.
+        </p>
+      </div>
+    </details>
+
+    <!-- ===== Code ===== -->
+    <h2 id="code">Code: a neural net with a hand-written training loop</h2>
+    <p>
+      The same tabular task as the classical baseline, but as a neural network — with the full training
+      loop spelled out so you can see the forward pass, loss, backpropagation, and optimizer step. This
+      loop is the exact pattern behind every deep model, including transformers.
+    </p>
+
+    <div class="codewrap">
+      <div class="codewrap__bar"><span class="codewrap__lang">python</span><span>rung 3 — an MLP with a hand-written training loop (PyTorch)</span><button class="copybtn" type="button">Copy</button></div>
+<pre><code class="language-python"># Rung 3: a neural net with the training loop spelled out, so you SEE every step.
+# For plain tabular data this is usually overkill — but the loop is the exact
+# pattern behind every deep model, including transformers.
+import torch
+import torch.nn as nn
+from sklearn.datasets import make_classification
+from sklearn.model_selection import train_test_split
+
+# Same style of tabular data as the classical baseline, converted to tensors.
+X, y = make_classification(n_samples=5000, n_features=20, n_informative=8, random_state=0)
+X_tr, X_te, y_tr, y_te = train_test_split(X, y, test_size=0.2, random_state=0)
+Xtr = torch.tensor(X_tr, dtype=torch.float32)
+ytr = torch.tensor(y_tr, dtype=torch.float32).unsqueeze(1)   # shape (N, 1)
+Xte = torch.tensor(X_te, dtype=torch.float32)
+
+# 1) Define the network: input(20) -> hidden(64) -> ReLU -> output(1).
+model = nn.Sequential(
+    nn.Linear(20, 64),   # weighted sum + bias  (W·x + b)
+    nn.ReLU(),           # non-linearity — without this, layers collapse to one linear map
+    nn.Linear(64, 1),    # single logit output
+)
+
+# 2) Loss + optimizer. BCEWithLogits = sigmoid + binary cross-entropy in one stable op.
+loss_fn   = nn.BCEWithLogitsLoss()
+optimizer = torch.optim.AdamW(model.parameters(), lr=1e-3)   # adaptive, the modern default
+
+# 3) The training loop — forward, loss, backward (backprop), step. Repeat.
+for epoch in range(200):
+    optimizer.zero_grad()          # clear gradients from the previous step
+    logits = model(Xtr)            # FORWARD pass: predictions
+    loss   = loss_fn(logits, ytr)  # how wrong are we?
+    loss.backward()                # BACKPROP: chain-rule gradients for every weight
+    optimizer.step()               # UPDATE: w <- w - lr * grad
+    if epoch % 50 == 0:
+        print(f"epoch {epoch:3d}  loss {loss.item():.4f}")
+
+# 4) Evaluate (no gradients needed at inference).
+with torch.no_grad():
+    prob = torch.sigmoid(model(Xte)).squeeze()     # logits -> probabilities
+    acc  = ((prob > 0.5).int() == torch.tensor(y_te)).float().mean()
+print(f"MLP accuracy: {acc:.3f}")
+# On tabular data this is usually within a hair of the gradient-boosted tree —
+# which is exactly why the cheap CPU model usually wins the deployment decision.
+</code></pre>
+    </div>
+
+    <div class="callout">
+      <div class="callout__title">Where to go next</div>
+      You have the training machinery. The next pages apply it to language — starting with how text
+      becomes numbers a network can read: <a href="p1-tokenization-embeddings.html">Tokenization,
+      Embeddings &amp; NLP</a>.
+    </div>
+
+    <nav class="pagenav" id="pageNav" aria-label="Page navigation"></nav>
+
+    <div class="sitefoot">cb-ml · Part 1 · Foundations &amp; Concepts</div>
+  </main>
+</body>
+</html>

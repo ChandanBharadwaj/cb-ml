@@ -3,8 +3,8 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>GenAI · LLM · SLM · cb-ml</title>
-  <meta name="description" content="How generative models actually produce text: the autoregressive objective, decoding knobs (temperature/top-k/top-p), context windows, hallucination, and the LLM-vs-SLM cost/latency decision.">
+  <title>GenAI, LLMs &amp; SLMs · cb-ml</title>
+  <meta name="description" content="How generative models actually produce text: the autoregressive objective, decoding knobs (temperature/top-k/top-p), context windows and the KV cache, scaling laws and model size, the Large- vs Small-Language-Model cost decision, and why LLMs hallucinate.">
   <script>(function(){try{var t=localStorage.getItem('cbml-theme');if(t)document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
   <link rel="stylesheet" href="assets/styles.css">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
@@ -32,17 +32,23 @@
 
   <main id="main">
     <span class="eyebrow">Part 1 · Foundations</span>
-    <h1>GenAI · LLM · SLM</h1>
+    <h1>GenAI, LLMs &amp; SLMs</h1>
     <p class="lede">
-      A transformer is the engine; a <strong>language model</strong> is what you get when you train
-      one to predict the next token over the whole internet. This page is about what that unlocks —
-      generation — and the knobs, limits, and cost trade-offs you’ll defend in every GenAI interview.
+      A transformer is the engine; a <strong>language model</strong> is what you get when you train one to
+      predict the next token over the whole internet. This page is about what that unlocks —
+      <strong>generation</strong> — and the knobs, limits, scale, and cost trade-offs you’ll defend in
+      every Generative AI interview.
+    </p>
+
+    <p class="prereq">
+      <b>Builds on</b> <a href="p1-transformers.html">Transformers &amp; Self-Attention</a>
+      <b>Next</b> <a href="p2-prompt-engineering.html">Part 2 · Prompt Engineering</a>
     </p>
 
     <div class="callout ladder">
       <div class="callout__title">Where this sits on the ladder</div>
-      <strong>Rung 4 — the top, and the most expensive.</strong> An LLM is astonishingly capable
-      <em>and</em> the priciest tool in the box (GPU memory or $/token, higher latency). The whole
+      <strong>Rung 4 — the top, and the most expensive.</strong> A Large Language Model is astonishingly
+      capable <em>and</em> the priciest tool in the box (GPU memory or $/token, higher latency). The whole
       art here is spending the least: pick the smallest model that clears the bar, and prefer
       <em>prompting → RAG → fine-tuning</em> in that order of cost.
       <div class="chips">
@@ -52,6 +58,22 @@
       </div>
     </div>
 
+    <div class="keyterms" aria-label="Key terms on this page">
+      <div class="keyterms__title">Key terms on this page</div>
+      <dl>
+        <div><dt>Generative AI <span class="abbr">(GenAI)</span></dt><dd>Models that produce new content — text, images, audio — rather than just classify.</dd></div>
+        <div><dt>Large Language Model <span class="abbr">(LLM)</span></dt><dd>A big transformer trained to predict the next token, capable of broad language tasks.</dd></div>
+        <div><dt>Small Language Model <span class="abbr">(SLM)</span></dt><dd>A compact model (~1–8B parameters) for narrow, cheap, private deployment.</dd></div>
+        <div><dt>Autoregressive</dt><dd>Generating one token at a time, each conditioned on all previous tokens.</dd></div>
+        <div><dt>Decoding</dt><dd>The strategy for turning the model’s probabilities into an actual token.</dd></div>
+        <div><dt>Top-p (nucleus)</dt><dd>Sample from the smallest set of tokens whose probability sums to p.</dd></div>
+        <div><dt>Context window</dt><dd>The maximum number of tokens the model can attend to at once.</dd></div>
+        <div><dt>KV cache</dt><dd>Key–Value cache — stores past attention keys/values so each new token is cheap.</dd></div>
+        <div><dt>Scaling laws</dt><dd>Predictable improvement in loss as model, data, and compute grow.</dd></div>
+        <div><dt>Retrieval-Augmented Generation <span class="abbr">(RAG)</span></dt><dd>Grounding answers in retrieved documents instead of the model’s memory.</dd></div>
+      </dl>
+    </div>
+
     <nav class="toc" aria-label="On this page">
       <div class="toc__title">On this page</div>
       <ol>
@@ -59,6 +81,7 @@
         <li><a href="#autoregressive">The autoregressive objective</a></li>
         <li><a href="#decoding">Decoding: how text is chosen</a></li>
         <li><a href="#context">Context window &amp; the KV cache</a></li>
+        <li><a href="#scaling">Scaling laws &amp; model size</a></li>
         <li><a href="#llmslm">LLM vs SLM — the cost decision</a></li>
         <li><a href="#halluc">Why LLMs hallucinate</a></li>
         <li><a href="#qa">Interview Q&amp;A</a></li>
@@ -68,28 +91,44 @@
 
     <!-- ===== Generative vs discriminative ===== -->
     <h2 id="genvsdisc">Generative vs discriminative</h2>
+    <div class="callout def">
+      <div class="callout__title">What it is</div>
+      <p>
+        A <strong>discriminative</strong> model learns a boundary between classes — “is this email spam?” A
+        <strong>generative</strong> model learns the distribution of the data itself, so it can
+        <em>sample new data</em> — “write an email.” Large Language Models are generative.
+      </p>
+    </div>
     <p>
-      A <strong>discriminative</strong> model learns a boundary: given input <code>x</code>, predict
-      label <code>y</code> — “is this email spam?” A <strong>generative</strong> model learns the
-      distribution of the data itself, so it can <em>sample new data</em> — “write an email.” LLMs are
-      generative: they model <code>P(next token | all previous tokens)</code> and produce text one
-      token at a time.
+      A discriminative model, given input <code>x</code>, predicts label <code>y</code>. A generative model
+      instead models how the data is produced, which lets it create fresh examples. LLMs are generative in a
+      very specific way: they model <code>P(next token | all previous tokens)</code> and produce text one
+      token at a time. That’s the whole trick — turning “understand language” into the repeatable task of
+      “predict what comes next.”
     </p>
     <div class="callout deeper">
-      <div class="callout__title">FDE framing</div>
-      Discriminative = <em>classify / score</em> (rungs 2–3 territory, cheap). Generative = <em>produce
-      open-ended content</em> (rung 4). If the task is really “pick one of N labels,” a classifier is
-      cheaper and more reliable than asking an LLM to choose.
+      <div class="callout__title">Bottom line</div>
+      Discriminative = classify / score (rungs 2–3, cheap). Generative = produce open-ended content (rung
+      4). If the task is really “pick one of N labels,” a classifier is cheaper and more reliable than
+      asking an LLM to choose.
     </div>
 
     <!-- ===== Autoregressive ===== -->
     <h2 id="autoregressive">The autoregressive objective</h2>
+    <div class="callout def">
+      <div class="callout__title">What it is</div>
+      <p>
+        <strong>Autoregressive</strong> means the model generates <strong>one token at a time</strong>, and
+        each new token is conditioned on everything before it — including the tokens it just produced. Both
+        training and generation are built on this single objective: predict the next token.
+      </p>
+    </div>
     <p>
       Pretraining is deceptively simple: <strong>predict the next token</strong>, over and over, on
-      trillions of tokens. That single objective forces the model to learn grammar, facts, reasoning
-      patterns, and style — all as a side effect of getting good at “what comes next.” At inference,
-      the model <strong>feeds its own output back in</strong> and repeats, which is why generation is
-      sequential (and why it can’t be fully parallelized like the forward pass).
+      trillions of tokens. That one objective forces the model to learn grammar, facts, reasoning patterns,
+      and style — all as a side effect of getting good at “what comes next.” At inference, the model
+      <strong>feeds its own output back in</strong> and repeats, which is why generation is sequential (and
+      why it can’t be fully parallelized like the forward pass on the neural-networks page).
     </p>
 
     <div class="figure">
@@ -102,21 +141,28 @@
           <rect x="312" y="50" width="60" height="32" rx="8" fill="var(--accent-soft,#2b2f55)" stroke="#7c8cff" stroke-width="2" class="anim-pulse"/><text x="342" y="71" fill="#7c8cff" font-weight="700">mat</text>
           <text x="410" y="71" fill="var(--text-muted,#9aa7b8)">?</text>
         </g>
-        <!-- feedback arrow: newest token loops back to input -->
         <path d="M342,86 C342,120 90,120 56,86" fill="none" stroke="#38bdf8" stroke-width="1.6" class="anim-flow" marker-end="url(#fb)"/>
         <defs><marker id="fb" markerWidth="9" markerHeight="9" refX="5" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#38bdf8"/></marker></defs>
         <text x="200" y="138" text-anchor="middle" font-size="11" fill="var(--text-muted,#9aa7b8)">each new token is appended and fed back in — token by token</text>
       </svg>
       <div class="figure__cap">Generation is a loop: predict a token, append it, predict again. The model only ever answers one question — “what’s the next token?”</div>
     </div>
+    <div class="callout deeper">
+      <div class="callout__title">Bottom line</div>
+      One objective — next-token prediction — does everything: it’s how the model learns and how it
+      generates. Its sequential nature is also why output length drives latency.
+    </div>
 
     <!-- ===== Decoding ===== -->
     <h2 id="decoding">Decoding: how the next token is chosen</h2>
-    <p>
-      The model outputs a probability over the entire vocabulary. <strong>Decoding</strong> is the
-      strategy for turning that distribution into an actual token — and it’s the knob you’ll tune most
-      in production:
-    </p>
+    <div class="callout def">
+      <div class="callout__title">What it is</div>
+      <p>
+        <strong>Decoding is the strategy that turns the model’s probability distribution over the vocabulary
+        into one actual token.</strong> The model gives you the odds; decoding decides how you pick — and
+        it’s the knob you tune most in production.
+      </p>
+    </div>
     <div class="tablewrap">
       <table>
         <thead><tr><th>Strategy</th><th>What it does</th><th>Use when</th></tr></thead>
@@ -134,7 +180,6 @@
       <svg viewBox="0 0 460 170" role="img" aria-label="How temperature reshapes the token probability distribution">
         <text x="115" y="16" text-anchor="middle" font-size="11" fill="#3fb950">low temp (0.2) — sharp, focused</text>
         <text x="345" y="16" text-anchor="middle" font-size="11" fill="#f85149">high temp (1.2) — flat, diverse</text>
-        <!-- low temp bars: one dominant -->
         <g>
           <rect x="40"  y="40"  width="26" height="90" rx="3" fill="#3fb950"/>
           <rect x="72"  y="110" width="26" height="20" rx="3" fill="#3fb950" opacity="0.5"/>
@@ -142,7 +187,6 @@
           <rect x="136" y="124" width="26" height="6"  rx="3" fill="#3fb950" opacity="0.3"/>
           <line x1="34" y1="130" x2="180" y2="130" stroke="var(--border-strong,#3a4457)"/>
         </g>
-        <!-- high temp bars: spread out -->
         <g>
           <rect x="280" y="70"  width="26" height="60" rx="3" fill="#f85149"/>
           <rect x="312" y="80"  width="26" height="50" rx="3" fill="#f85149" opacity="0.85"/>
@@ -157,36 +201,101 @@
 
     <div class="callout warn">
       <div class="callout__title">Interview-ready knob settings</div>
-      <strong>Extraction / classification / SQL / JSON:</strong> temperature 0 (greedy) — you want the
-      same answer every time. <strong>Brainstorming / copywriting:</strong> temperature 0.7–1.0 with
-      top-p ~0.9. Reaching for high temperature to “fix” wrong answers is a red flag — that’s a
-      grounding problem (RAG), not a sampling problem.
+      <strong>Extraction / classification / SQL / JSON:</strong> temperature 0 (greedy) — you want the same
+      answer every time. <strong>Brainstorming / copywriting:</strong> temperature 0.7–1.0 with top-p ~0.9.
+      Reaching for high temperature to “fix” wrong answers is a red flag — that’s a grounding problem (RAG),
+      not a sampling problem.
+    </div>
+    <div class="callout deeper">
+      <div class="callout__title">Bottom line</div>
+      The model’s probabilities are fixed; decoding chooses how boldly you sample from them. Determinism
+      (temperature 0) for facts, controlled randomness (top-p) for creativity.
     </div>
 
     <!-- ===== Context ===== -->
     <h2 id="context">Context window &amp; the KV cache</h2>
+    <div class="callout def">
+      <div class="callout__title">What it is</div>
+      <p>
+        The <strong>context window</strong> is the maximum number of tokens the model can attend to at once.
+        The <strong>KV cache (Key–Value cache)</strong> is an optimization that stores the attention keys and
+        values of past tokens so each new token is cheap to generate.
+      </p>
+    </div>
     <p>
-      The <strong>context window</strong> is how many tokens the model can attend to at once (4k → 200k+
-      depending on the model). Everything — system prompt, chat history, retrieved documents, and the
-      answer being generated — must fit inside it. Because attention is <code>O(n²)</code>, long
-      contexts cost more compute and money, and quality can degrade in the middle (“lost in the
-      middle”). To avoid recomputing attention for every prior token on each new step, models cache
-      past keys/values — the <strong>KV cache</strong> (covered on the Inference Optimization page).
+      Everything the model uses on a call — system prompt, chat history, retrieved documents, and the answer
+      being generated — must fit inside the context window (4k → 200k+ tokens depending on the model).
+      Because attention is <code>O(n²)</code>, long contexts cost more compute and money, and quality can
+      degrade in the middle (the “lost in the middle” effect). To avoid recomputing attention over every
+      prior token at each step, models cache past keys and values — the <strong>KV cache</strong> — which is
+      covered in depth in Part 3 → <a href="p3-inference-optimization.html">Inference Optimization</a>.
     </p>
     <div class="callout deeper">
-      <div class="callout__title">FDE takeaway</div>
-      A bigger context window is not free and not always better. Stuffing 100k tokens of documents in
-      is slower, pricier, and often <em>worse</em> than retrieving the right 2k tokens with RAG. Context
-      is a budget, not a dumping ground.
+      <div class="callout__title">Bottom line</div>
+      A bigger context window is not free and not always better. Retrieving the right 2k tokens usually
+      beats stuffing in 100k. Context is a budget, not a dumping ground.
+    </div>
+
+    <!-- ===== Scaling laws ===== -->
+    <h2 id="scaling">Scaling laws &amp; model size</h2>
+    <div class="callout def">
+      <div class="callout__title">What it is</div>
+      <p>
+        <strong>Scaling laws are the empirical finding that a model’s loss falls predictably as you grow
+        three things together — parameters, training data, and compute.</strong> “Model size” is the
+        parameter count: a “7B” model has seven billion learned weights.
+      </p>
+    </div>
+    <p>
+      This is <em>why</em> language models got dramatically better: not one clever trick, but making the
+      same transformer bigger, trained on more tokens, with more compute — and the improvement follows a
+      smooth curve you can extrapolate. Two consequences you should be able to name.
+      <strong>Emergence:</strong> some abilities (multi-step reasoning, in-context learning) appear only past
+      a certain scale, seemingly “switching on.” <strong>The compute-optimal balance</strong> (the Chinchilla
+      finding): for a fixed compute budget, you shouldn’t just grow parameters — you must grow training data
+      proportionally, which is why smaller-but-well-trained models can beat larger under-trained ones.
+    </p>
+
+    <div class="figure">
+      <svg viewBox="0 0 460 170" role="img" aria-label="Scaling: loss falls smoothly as model, data, and compute grow">
+        <line x1="46" y1="24" x2="46" y2="132" stroke="var(--border-strong,#3a4457)" stroke-width="1.5"/>
+        <line x1="46" y1="132" x2="430" y2="132" stroke="var(--border-strong,#3a4457)" stroke-width="1.5"/>
+        <text x="20" y="80" font-size="11" fill="var(--text-muted,#9aa7b8)" transform="rotate(-90 20 80)" text-anchor="middle">loss ↓</text>
+        <text x="238" y="158" font-size="11" fill="var(--text-muted,#9aa7b8)" text-anchor="middle">model + data + compute →</text>
+        <!-- smooth decreasing curve -->
+        <path d="M56,38 C130,60 180,96 250,110 C320,122 380,126 420,128" fill="none" stroke="#7c8cff" stroke-width="2.5" class="anim-float"/>
+        <!-- size markers -->
+        <g font-family="monospace" font-size="10" text-anchor="middle">
+          <circle cx="96" cy="52" r="4" fill="#38bdf8"/><text x="96" y="44" fill="#38bdf8">SLM ~7B</text>
+          <circle cx="250" cy="110" r="4" fill="#7c8cff"/><text x="250" y="102" fill="#7c8cff">~70B</text>
+          <circle cx="405" cy="127" r="4" fill="#3fb950"/><text x="398" y="120" fill="#3fb950">frontier</text>
+        </g>
+        <text x="300" y="52" font-size="10" fill="var(--warn,#d29922)">↑ diminishing returns — each gain costs much more</text>
+      </svg>
+      <div class="figure__cap">Loss drops smoothly with scale, but with diminishing returns — doubling capability costs far more than double. That curve is exactly why the size decision below matters.</div>
+    </div>
+    <div class="callout deeper">
+      <div class="callout__title">Bottom line</div>
+      Scale buys capability predictably but with steep diminishing returns. The engineering question is never
+      “biggest?” — it’s “what’s the smallest model on this curve that clears my bar?”
     </div>
 
     <!-- ===== LLM vs SLM ===== -->
     <h2 id="llmslm">LLM vs SLM — the cost decision</h2>
+    <div class="callout def">
+      <div class="callout__title">What it is</div>
+      <p>
+        A <strong>Small Language Model (SLM)</strong> is a compact model (~1–8 billion parameters — Phi,
+        Gemma, Llama-8B, Mistral-7B) chosen when you don’t need a frontier <strong>Large Language Model
+        (LLM)</strong>. It’s the rung-4 version of “do I really need the big one?”
+      </p>
+    </div>
     <p>
-      A <strong>Small Language Model</strong> (1–8B params — Phi, Gemma, Llama-8B, Mistral-7B) is the
-      rung-4 equivalent of “do I really need the big one?” For a well-scoped task — classification,
-      extraction, routing, a narrow chatbot — a fine-tuned SLM can match a frontier LLM at a fraction
-      of the cost and latency, and it can run on-prem or even on-device (huge for regulated customers).
+      For a well-scoped task — classification, extraction, routing, a narrow chatbot — a fine-tuned SLM can
+      match a frontier LLM at a fraction of the cost and latency, and it can run on-premises or even
+      on-device (huge for regulated customers). The scaling curve above is what makes this real: past the
+      point of diminishing returns, the extra parameters of a frontier model add little on a narrow task but
+      cost a lot to serve.
     </p>
     <div class="tablewrap">
       <table>
@@ -195,31 +304,43 @@
           <tr><td>Cost / latency</td><td>Low — cheap, fast</td><td>High — $/token, slower</td></tr>
           <tr><td>Hosting</td><td>On-prem / on-device / single GPU</td><td>Multi-GPU or hosted API</td></tr>
           <tr><td>Best at</td><td>Narrow, well-defined tasks (esp. fine-tuned)</td><td>Broad reasoning, open-ended, zero-shot generality</td></tr>
-          <tr><td>Data privacy</td><td>Easy to keep in your VPC</td><td>Often sends data to a vendor</td></tr>
+          <tr><td>Data privacy</td><td>Easy to keep in your VPC (Virtual Private Cloud)</td><td>Often sends data to a vendor</td></tr>
           <tr><td>FDE fit</td><td>Ship cheap, private, per-customer</td><td>Prototype fast, hardest tasks</td></tr>
         </tbody>
       </table>
     </div>
     <div class="callout ladder">
       <div class="callout__title">Ladder rule (inside rung 4)</div>
-      Even at the top rung there’s a ladder: try a <strong>hosted frontier LLM</strong> to prove the task
-      is solvable, then <strong>shrink to the smallest SLM</strong> that still passes your evals for
-      production. Prototyping cost ≠ production cost.
+      Even at the top rung there’s a ladder: try a <strong>hosted frontier LLM</strong> to prove the task is
+      solvable, then <strong>shrink to the smallest SLM</strong> that still passes your evals for production.
+      Prototyping cost ≠ production cost.
     </div>
 
     <!-- ===== Hallucination ===== -->
     <h2 id="halluc">Why LLMs hallucinate</h2>
+    <div class="callout def">
+      <div class="callout__title">What it is</div>
+      <p>
+        A <strong>hallucination is a confident, fluent answer that is simply false.</strong> It happens
+        because an LLM is trained to produce <em>plausible</em> next tokens, not <em>true</em> ones — it has
+        no built-in notion of “I don’t know.”
+      </p>
+    </div>
     <p>
-      An LLM is trained to produce <em>plausible</em> next tokens, not <em>true</em> ones. It has no
-      built-in notion of “I don’t know” — so when the answer isn’t in its weights, it confidently makes
-      something up that <em>sounds</em> right. This is a feature of the objective, not a bug you can
-      fully prompt away. The production fixes:
+      When the answer isn’t reliably in its weights, the model fills the gap with something that
+      <em>sounds</em> right. This is a property of the next-token objective, not a bug you can fully prompt
+      away. The production fixes:
     </p>
     <ul>
-      <li><strong>Ground it</strong> with retrieved facts (RAG) so the answer comes from your data, not its memory.</li>
+      <li><strong>Ground it</strong> with retrieved facts (Retrieval-Augmented Generation) so the answer comes from your data, not its memory.</li>
       <li><strong>Constrain it</strong> — structured output, allowed-value lists, “say ‘unknown’ if unsure.”</li>
-      <li><strong>Verify it</strong> — cite sources, check answers against the context, use an eval/judge.</li>
+      <li><strong>Verify it</strong> — cite sources, check answers against the context, use an eval / judge.</li>
     </ul>
+    <div class="callout deeper">
+      <div class="callout__title">Bottom line</div>
+      Hallucination is a grounding problem, not a randomness problem. The cure is retrieval, constraints, and
+      verification — which is exactly what Part 2 is about.
+    </div>
 
     <!-- ===== Q&A ===== -->
     <h2 id="qa">Interview Q&amp;A</h2>
@@ -228,11 +349,11 @@
       <summary class="qa__q"><span class="badge core">core</span>What does “autoregressive” mean for an LLM?</summary>
       <div class="qa__a">
         <p>
-          It generates one token at a time, and each new token is conditioned on all the tokens before
-          it — including the ones it just produced. Training maximizes <code>P(next token | previous
-          tokens)</code> over huge corpora; inference feeds the model’s own output back in and repeats.
-          That sequential dependency is why generation latency scales with output length and can’t be
-          parallelized the way the forward pass can.
+          It generates one token at a time, and each new token is conditioned on all the tokens before it —
+          including the ones it just produced. Training maximizes <code>P(next token | previous tokens)</code>
+          over huge corpora; inference feeds the model’s own output back in and repeats. That sequential
+          dependency is why generation latency scales with output length and can’t be parallelized the way
+          the forward pass can.
         </p>
       </div>
     </details>
@@ -241,11 +362,24 @@
       <summary class="qa__q"><span class="badge core">core</span>Temperature vs top-p — how do you set them?</summary>
       <div class="qa__a">
         <p>
-          Temperature rescales the distribution (low = sharp/deterministic, high = flat/creative);
-          top-p (nucleus) samples from the smallest set of tokens covering probability <code>p</code>,
-          clipping the unlikely tail. In practice: for factual/extraction work use temperature 0. For
-          creative work use temperature ~0.7–1.0 with top-p ~0.9. I generally tune one, not both, to
-          keep behavior predictable.
+          Temperature rescales the distribution (low = sharp/deterministic, high = flat/creative); top-p
+          (nucleus) samples from the smallest set of tokens covering probability <code>p</code>, clipping the
+          unlikely tail. In practice: for factual/extraction work use temperature 0. For creative work use
+          temperature ~0.7–1.0 with top-p ~0.9. I generally tune one, not both, to keep behavior predictable.
+        </p>
+      </div>
+    </details>
+
+    <details class="qa">
+      <summary class="qa__q"><span class="badge senior">senior</span>What are scaling laws, and why do they matter for a build decision?</summary>
+      <div class="qa__a">
+        <p>
+          Scaling laws say loss improves predictably as parameters, data, and compute grow together — which is
+          why bigger models got better and why some abilities only emerge past a certain scale. They matter
+          because the curve has diminishing returns: on a narrow task, a frontier model’s extra parameters buy
+          little but cost a lot to serve. The compute-optimal (Chinchilla) result adds that you must scale
+          data with parameters, so a smaller, well-trained model often beats a bigger, under-trained one —
+          the basis for choosing an SLM.
         </p>
       </div>
     </details>
@@ -254,11 +388,11 @@
       <summary class="qa__q"><span class="badge senior">senior</span>When would you choose an SLM over a frontier LLM?</summary>
       <div class="qa__a">
         <p>
-          When the task is narrow and high-volume (classification, extraction, routing, a scoped
-          assistant), when latency or cost per call matters, or when data can’t leave the customer’s
-          environment. A fine-tuned 7B model can match a frontier model on a specific task for a
-          fraction of the cost and run on a single GPU or on-device. I’d prototype on a hosted LLM to
-          prove feasibility, then distill/fine-tune down to the smallest model that passes evals.
+          When the task is narrow and high-volume (classification, extraction, routing, a scoped assistant),
+          when latency or cost per call matters, or when data can’t leave the customer’s environment. A
+          fine-tuned 7B model can match a frontier model on a specific task for a fraction of the cost and run
+          on a single GPU or on-device. I’d prototype on a hosted LLM to prove feasibility, then
+          distill/fine-tune down to the smallest model that passes evals.
         </p>
       </div>
     </details>
@@ -267,23 +401,10 @@
       <summary class="qa__q"><span class="badge trap">trap</span>The model keeps inventing facts. Do you raise or lower temperature?</summary>
       <div class="qa__a">
         <p>
-          Neither — temperature is the wrong lever. Hallucination is a <em>grounding</em> problem: the
-          fact isn’t reliably in the weights, so the model fills the gap. Lowering temperature just
-          makes it confidently wrong more consistently. The fix is to supply the facts (RAG), constrain
-          the output, and let it say “I don’t know.” Temperature only controls randomness, not truth.
-        </p>
-      </div>
-    </details>
-
-    <details class="qa">
-      <summary class="qa__q"><span class="badge senior">senior</span>Why can’t you speed up generation just by adding GPUs like the forward pass?</summary>
-      <div class="qa__a">
-        <p>
-          Because generation is inherently sequential — token <code>t+1</code> depends on token
-          <code>t</code>, which the model just produced. You can parallelize <em>within</em> a step
-          (and across many requests via batching), but you can’t compute a sequence’s tokens
-          simultaneously. That’s why output length drives latency, and why tricks like speculative
-          decoding and KV-caching exist to shave per-token cost rather than parallelize the sequence.
+          Neither — temperature is the wrong lever. Hallucination is a <em>grounding</em> problem: the fact
+          isn’t reliably in the weights, so the model fills the gap. Lowering temperature just makes it
+          confidently wrong more consistently. The fix is to supply the facts (RAG), constrain the output, and
+          let it say “I don’t know.” Temperature only controls randomness, not truth.
         </p>
       </div>
     </details>
@@ -293,10 +414,10 @@
       <div class="qa__a">
         <p>
           Everything the model sees on this call: system prompt, conversation history, any retrieved
-          documents, and the tokens generated so far. Since attention is quadratic in length, a larger
-          window costs more compute, more money, and more latency, and models can lose track of
-          material buried in the middle. The skill is fitting the <em>right</em> context, not the
-          <em>most</em> — which is exactly why retrieval beats “paste everything.”
+          documents, and the tokens generated so far. Since attention is quadratic in length, a larger window
+          costs more compute, more money, and more latency, and models can lose track of material buried in
+          the middle. The skill is fitting the <em>right</em> context, not the <em>most</em> — which is exactly
+          why retrieval beats “paste everything.”
         </p>
       </div>
     </details>
@@ -304,8 +425,8 @@
     <!-- ===== Code ===== -->
     <h2 id="code">Code: controlling generation with Hugging Face</h2>
     <p>
-      The same prompt, two behaviors — deterministic vs creative — driven entirely by decoding
-      parameters. This is the exact dial you tune when moving a feature from “demo” to “reliable.”
+      The same prompt, two behaviors — deterministic vs creative — driven entirely by decoding parameters.
+      This is the exact dial you tune when moving a feature from “demo” to “reliable.”
     </p>
 
     <div class="codewrap">
@@ -350,10 +471,10 @@ print("CREATIVE:", tok.decode(creative[0], skip_special_tokens=True))
     </div>
 
     <div class="callout">
-      <div class="callout__title">Connect it to what you know</div>
-      Think of decoding params like log levels or feature flags: same binary, different runtime
-      behavior. You wouldn’t ship a service with DEBUG logging on by accident — likewise, don’t ship a
-      data-extraction endpoint with <code>temperature=1.0</code>. Pin it to 0 and make it boring.
+      <div class="callout__title">Where to go next</div>
+      That’s Part 1. You now understand the whole stack from a spreadsheet to a frontier model. Part 2 is
+      where you build with it — starting with the cheapest, highest-leverage skill:
+      <a href="p2-prompt-engineering.html">Prompt Engineering</a>.
     </div>
 
     <nav class="pagenav" id="pageNav" aria-label="Page navigation"></nav>

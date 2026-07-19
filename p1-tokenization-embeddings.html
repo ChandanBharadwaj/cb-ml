@@ -1,0 +1,350 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Tokenization, Embeddings &amp; NLP · cb-ml</title>
+  <meta name="description" content="How text becomes numbers a model can read: what Natural Language Processing is, subword tokenization (Byte-Pair Encoding), embedding vectors that place meaning in space, and positional encoding (sinusoidal and RoPE).">
+  <script>(function(){try{var t=localStorage.getItem('cbml-theme');if(t)document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+  <link rel="stylesheet" href="assets/styles.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+  <script defer src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+  <script defer src="assets/app.js"></script>
+</head>
+<body>
+  <a class="skip" href="#main">Skip to content</a>
+
+  <header class="topbar">
+    <button id="menuBtn" class="iconbtn" aria-label="Open navigation" aria-expanded="false">☰</button>
+    <a class="topbar__brand" href="index.html"><span class="logo">ml</span> cb-ml</a>
+    <span class="topbar__spacer"></span>
+    <button id="themeBtn" class="iconbtn" aria-label="Toggle theme">☾</button>
+  </header>
+
+  <aside id="drawer" class="drawer" aria-label="Site navigation">
+    <div class="drawer__head">
+      <span class="logo">ml</span>
+      <div><div class="drawer__title">cb-ml</div><div class="drawer__sub">AI/ML · GenAI interview prep</div></div>
+    </div>
+    <nav id="drawerNav"></nav>
+  </aside>
+  <div id="scrim" class="scrim"></div>
+
+  <main id="main">
+    <span class="eyebrow">Part 1 · Foundations</span>
+    <h1>Tokenization, Embeddings &amp; NLP</h1>
+    <p class="lede">
+      A neural network only does math on numbers — so the first job of any language model is turning text
+      into numbers, and back. This page covers that pipeline end to end: what Natural Language Processing
+      is, how text is split into <strong>tokens</strong>, how tokens become meaning-carrying
+      <strong>embeddings</strong>, and how models are told the <strong>order</strong> of the words.
+    </p>
+
+    <p class="prereq">
+      <b>Builds on</b> <a href="p1-neural-networks.html">Neural Networks &amp; Deep Learning</a>
+      <b>Next</b> <a href="p1-transformers.html">Transformers &amp; Self-Attention</a>
+    </p>
+
+    <div class="callout ladder">
+      <div class="callout__title">Where this sits on the ladder</div>
+      <strong>Rung 3–4.</strong> This is the input layer of every language model. Tokenization and
+      embeddings turn words into vectors the way earlier pages turned spreadsheet columns into features —
+      except here the “feature engineering” is learned. It feeds directly into the transformer on the next
+      page.
+      <div class="chips">
+        <span class="chip gpu">GPU for large models</span>
+        <span class="chip">text → numbers → text</span>
+      </div>
+    </div>
+
+    <div class="keyterms" aria-label="Key terms on this page">
+      <div class="keyterms__title">Key terms on this page</div>
+      <dl>
+        <div><dt>Natural Language Processing <span class="abbr">(NLP)</span></dt><dd>The field of getting computers to work with human language.</dd></div>
+        <div><dt>Token</dt><dd>A chunk of text (a word or word-piece) that the model treats as one unit.</dd></div>
+        <div><dt>Token ID</dt><dd>The integer a token maps to — what the model actually sees.</dd></div>
+        <div><dt>Byte-Pair Encoding <span class="abbr">(BPE)</span></dt><dd>A subword tokenizer that merges frequent character pairs into tokens.</dd></div>
+        <div><dt>Vocabulary</dt><dd>The fixed set of all tokens a model knows (~30k–100k).</dd></div>
+        <div><dt>Embedding</dt><dd>A learned vector that places a token in a semantic space.</dd></div>
+        <div><dt>Positional encoding</dt><dd>Extra signal that tells the model the order of tokens.</dd></div>
+        <div><dt>Rotary Position Embedding <span class="abbr">(RoPE)</span></dt><dd>Modern scheme that rotates vectors by position so attention uses relative distance.</dd></div>
+      </dl>
+    </div>
+
+    <nav class="toc" aria-label="On this page">
+      <div class="toc__title">On this page</div>
+      <ol>
+        <li><a href="#nlp">What Natural Language Processing is</a></li>
+        <li><a href="#tokenization">Tokenization</a></li>
+        <li><a href="#embeddings">Embeddings</a></li>
+        <li><a href="#position">Positional encoding</a></li>
+        <li><a href="#qa">Interview Q&amp;A</a></li>
+        <li><a href="#code">Code: tokens &amp; embeddings with Hugging Face</a></li>
+      </ol>
+    </nav>
+
+    <!-- ===== NLP ===== -->
+    <h2 id="nlp">What Natural Language Processing is</h2>
+    <div class="callout def">
+      <div class="callout__title">What it is</div>
+      <p>
+        <strong>Natural Language Processing (NLP) is the field of getting computers to read, understand,
+        and produce human language.</strong> Everything from spam filters to search to chatbots is NLP;
+        modern NLP does it by converting text into numbers, doing math, and converting back.
+      </p>
+    </div>
+    <p>
+      The hard part is that language is <em>unstructured</em> — no tidy columns, huge vocabulary, meaning
+      that depends on order and context. For decades NLP relied on hand-built rules and features; today it
+      is dominated by neural networks that learn from raw text. But every one of those models starts with
+      the same two steps this page is about: <strong>tokenize</strong> the text into units, then
+      <strong>embed</strong> those units as vectors. Get those right and the transformer on the next page
+      does the rest.
+    </p>
+    <div class="callout deeper">
+      <div class="callout__title">Bottom line</div>
+      NLP is “machine learning for language.” The pipeline is always the same: text → tokens → embeddings
+      → model → tokens → text.
+    </div>
+
+    <!-- ===== Tokenization ===== -->
+    <h2 id="tokenization">Tokenization</h2>
+    <div class="callout def">
+      <div class="callout__title">What it is</div>
+      <p>
+        <strong>Tokenization is the step that splits text into tokens and maps each to an integer ID.</strong>
+        A <strong>token</strong> is usually a <em>subword</em> — a common word stays whole, a rare word
+        breaks into reusable pieces — so a small fixed vocabulary can represent any string.
+      </p>
+    </div>
+    <p>
+      Models don’t see letters; they see integer <strong>token IDs</strong>. Modern language models use
+      <strong>subword</strong> tokenization — <strong>Byte-Pair Encoding (BPE)</strong>,
+      <strong>WordPiece</strong>, or <strong>SentencePiece</strong> — which keeps the vocabulary small
+      (~30k–100k) while still covering typos and words it never saw in training. BPE works by starting from
+      characters and repeatedly merging the most frequent adjacent pair into a new token, so
+      high-frequency chunks become single tokens and rare words fall back to smaller pieces.
+    </p>
+
+    <div class="figure">
+      <svg viewBox="0 0 460 130" role="img" aria-label="The word 'tokenization' splitting into subword tokens">
+        <text x="30" y="34" fill="var(--text,#e6edf3)" font-size="15" font-family="monospace">"tokenization is fun"</text>
+        <g font-family="monospace" font-size="13" font-weight="700">
+          <g style="animation:fadeSlide .5s ease both;">
+            <rect x="30"  y="60" width="52" height="30" rx="7" fill="var(--accent-soft,#2b2f55)" stroke="#7c8cff"/>
+            <text x="56"  y="80" text-anchor="middle" fill="#7c8cff">token</text>
+          </g>
+          <g style="animation:fadeSlide .5s ease .15s both;">
+            <rect x="90"  y="60" width="42" height="30" rx="7" fill="var(--accent-soft,#2b2f55)" stroke="#7c8cff"/>
+            <text x="111" y="80" text-anchor="middle" fill="#7c8cff">iza</text>
+          </g>
+          <g style="animation:fadeSlide .5s ease .3s both;">
+            <rect x="140" y="60" width="46" height="30" rx="7" fill="var(--accent-soft,#2b2f55)" stroke="#7c8cff"/>
+            <text x="163" y="80" text-anchor="middle" fill="#7c8cff">tion</text>
+          </g>
+          <g style="animation:fadeSlide .5s ease .45s both;">
+            <rect x="194" y="60" width="30" height="30" rx="7" fill="var(--surface-2,#1c2333)" stroke="#38bdf8"/>
+            <text x="209" y="80" text-anchor="middle" fill="#38bdf8">is</text>
+          </g>
+          <g style="animation:fadeSlide .5s ease .6s both;">
+            <rect x="232" y="60" width="40" height="30" rx="7" fill="var(--surface-2,#1c2333)" stroke="#38bdf8"/>
+            <text x="252" y="80" text-anchor="middle" fill="#38bdf8">fun</text>
+          </g>
+        </g>
+        <text x="30" y="115" fill="var(--text-muted,#9aa7b8)" font-size="11" font-family="monospace">→ IDs: [3078, 2634, 4575, 318, 1257]</text>
+      </svg>
+      <div class="figure__cap">“tokenization” is rare, so it splits into <code>token</code>+<code>iza</code>+<code>tion</code>; common words stay whole. Each token maps to an integer ID.</div>
+    </div>
+
+    <div class="callout warn">
+      <div class="callout__title">FDE gotcha: tokens ≠ words</div>
+      English averages ~1.3 tokens per word; code and non-Latin scripts cost more. Since you pay
+      <strong>per token</strong> and context windows are measured in tokens, a “4k-word” document can blow a
+      budget. Always estimate tokens, not words.
+    </div>
+    <div class="callout deeper">
+      <div class="callout__title">Bottom line</div>
+      Tokenization is the bridge from text to integers. Subword schemes like BPE give a small vocabulary
+      that still represents anything — and the token, not the word, is the unit you count and pay for.
+    </div>
+
+    <!-- ===== Embeddings ===== -->
+    <h2 id="embeddings">Embeddings</h2>
+    <div class="callout def">
+      <div class="callout__title">What it is</div>
+      <p>
+        An <strong>embedding is a learned vector that represents a token’s meaning as a point in
+        space</strong>, arranged so that tokens with similar meaning sit close together. A token ID indexes
+        into an <strong>embedding table</strong> to fetch its vector.
+      </p>
+    </div>
+    <p>
+      Once text is a list of token IDs, each ID looks up a row in a big learned matrix — the embedding
+      table — giving a vector of, say, 768–4096 numbers. During training these vectors organise
+      themselves into a <strong>semantic space</strong>: “king” lands near “queen,” “Paris” near “France.”
+      This is the same idea as a feature vector from earlier pages, except the features are
+      <em>learned</em> rather than hand-designed. Those vectors are also what you store in a
+      <a href="p2-vector-db-embeddings.html">vector database</a> to power semantic search and Retrieval-
+      Augmented Generation.
+    </p>
+    <div class="callout deeper">
+      <div class="callout__title">Bottom line</div>
+      An embedding turns a discrete token into a continuous vector of meaning. Similar meanings → nearby
+      vectors — the property every downstream language task relies on.
+    </div>
+
+    <!-- ===== Positional encoding ===== -->
+    <h2 id="position">Positional encoding</h2>
+    <div class="callout def">
+      <div class="callout__title">What it is</div>
+      <p>
+        <strong>Positional encoding is the extra signal that tells the model the order of the tokens.</strong>
+        Attention (next page) treats its input as an unordered set, so without this a model couldn’t tell
+        “dog bites man” from “man bites dog.”
+      </p>
+    </div>
+    <p>
+      The embedding says <em>what</em> a token is; positional encoding says <em>where</em> it sits. The
+      original transformer added fixed <strong>sinusoidal</strong> signals — a bank of sine and cosine
+      waves at different frequencies, giving every position a unique fingerprint. Most models since 2023
+      (LLaMA, most open models) instead use <strong>Rotary Position Embedding (RoPE)</strong>, which
+      <em>rotates</em> the query and key vectors by an angle proportional to position. The elegant result:
+      attention ends up depending on the <strong>relative</strong> distance between tokens, and it
+      extrapolates better to sequences longer than those seen in training.
+    </p>
+
+    <div class="figure">
+      <svg viewBox="0 0 460 150" role="img" aria-label="Sinusoidal positional encoding: sine waves of different frequencies">
+        <line x1="20" y1="75" x2="440" y2="75" stroke="var(--border,#2a3140)" stroke-width="1"/>
+        <path d="M20,75 Q40,20 60,75 T100,75 T140,75 T180,75 T220,75 T260,75 T300,75 T340,75 T380,75 T420,75"
+              fill="none" stroke="#7c8cff" stroke-width="2" class="anim-float"/>
+        <path d="M20,75 Q55,30 90,75 T160,75 T230,75 T300,75 T370,75 T440,75"
+              fill="none" stroke="#38bdf8" stroke-width="2" opacity="0.8"/>
+        <path d="M20,75 Q90,40 160,75 T300,75 T440,75"
+              fill="none" stroke="#3fb950" stroke-width="2" opacity="0.7"/>
+        <text x="20" y="140" fill="var(--text-muted,#9aa7b8)" font-size="11">position →</text>
+        <text x="360" y="140" fill="var(--text-muted,#9aa7b8)" font-size="11">each dim = its own frequency</text>
+      </svg>
+      <div class="figure__cap">Position is encoded as a bank of sinusoids at different frequencies. Every position gets a unique fingerprint; nearby positions get similar ones.</div>
+    </div>
+    <div class="callout deeper">
+      <div class="callout__title">Bottom line</div>
+      Embeddings encode meaning; positional encoding encodes order. Modern models prefer RoPE because
+      relative-position awareness generalises to longer contexts — which is why it underpins today’s
+      long-context LLMs.
+    </div>
+
+    <!-- ===== Q&A ===== -->
+    <h2 id="qa">Interview Q&amp;A</h2>
+
+    <details class="qa">
+      <summary class="qa__q"><span class="badge core">core</span>Why subword tokenization instead of splitting on words?</summary>
+      <div class="qa__a">
+        <p>
+          Word-level vocabularies explode in size and still fail on unseen words, typos, and other
+          languages. Subword schemes (BPE, WordPiece, SentencePiece) keep a small fixed vocabulary while
+          representing <em>any</em> string: common words are single tokens, rare ones decompose into
+          reusable pieces. That balances vocabulary size against sequence length.
+        </p>
+      </div>
+    </details>
+
+    <details class="qa">
+      <summary class="qa__q"><span class="badge trap">trap</span>A user pastes a 4,000-word document. Why might it not fit a 4k-token context window?</summary>
+      <div class="qa__a">
+        <p>
+          Because tokens aren’t words. English runs ~1.3 tokens per word, and code, punctuation, or
+          non-Latin scripts push it higher — so 4,000 words can be 5,000–6,000+ tokens. Context limits and
+          billing are in tokens, so you always estimate in tokens, not words.
+        </p>
+      </div>
+    </details>
+
+    <details class="qa">
+      <summary class="qa__q"><span class="badge core">core</span>What is an embedding, in one line?</summary>
+      <div class="qa__a">
+        <p>
+          A learned vector that places a token (or a whole sentence) in a semantic space where similar
+          meanings are close together. It’s how discrete text becomes continuous numbers a network can do
+          math on — and what you index in a vector database for semantic search.
+        </p>
+      </div>
+    </details>
+
+    <details class="qa">
+      <summary class="qa__q"><span class="badge trap">trap</span>If a model processes tokens in parallel, how does it know word order?</summary>
+      <div class="qa__a">
+        <p>
+          It doesn’t, until you add positional information. On its own, attention treats the input as an
+          unordered set. Positional encodings — sinusoidal, learned, or RoPE — inject order so the model can
+          distinguish “dog bites man” from “man bites dog.”
+        </p>
+      </div>
+    </details>
+
+    <details class="qa">
+      <summary class="qa__q"><span class="badge senior">senior</span>Why do modern LLMs use RoPE instead of the original sinusoidal encodings?</summary>
+      <div class="qa__a">
+        <p>
+          Sinusoidal/learned <em>absolute</em> encodings are added to the input once. RoPE instead
+          <em>rotates</em> the query and key vectors by an angle tied to position, so the attention score
+          between two tokens depends on their <strong>relative</strong> offset. That generalises better to
+          positions unseen in training and makes context-length extension (e.g. NTK / YaRN scaling)
+          tractable — which is why almost all 2023+ open models adopted it.
+        </p>
+      </div>
+    </details>
+
+    <!-- ===== Code ===== -->
+    <h2 id="code">Code: tokens &amp; embeddings with Hugging Face</h2>
+    <p>
+      Text in, vectors out — the real-world version of this whole pipeline. Here we tokenize two sentences
+      and pull a sentence embedding from a small pretrained model, then check that two paraphrases land
+      close together.
+    </p>
+
+    <div class="codewrap">
+      <div class="codewrap__bar"><span class="codewrap__lang">python</span><span>tokenizer + embeddings with Hugging Face</span><button class="copybtn" type="button">Copy</button></div>
+<pre><code class="language-python"># Turn text into token IDs, then into a meaning vector, using a pretrained model.
+# pip install transformers torch
+from transformers import AutoTokenizer, AutoModel
+import torch
+
+model_name = "sentence-transformers/all-MiniLM-L6-v2"   # a small encoder — CPU-friendly
+tokenizer = AutoTokenizer.from_pretrained(model_name)
+model = AutoModel.from_pretrained(model_name)
+
+sentences = ["The cat sat on the mat.", "A feline rested on a rug."]
+
+# 1) Tokenize: text -> token IDs (+ attention mask for padding).
+enc = tokenizer(sentences, padding=True, truncation=True, return_tensors="pt")
+print("token IDs:\n", enc["input_ids"])
+
+# 2) Forward pass through the model (no gradients needed for inference).
+with torch.no_grad():
+    out = model(**enc)                       # last_hidden_state: (batch, seq_len, hidden)
+
+# 3) Mean-pool token vectors into one sentence embedding (mask out padding).
+mask = enc["attention_mask"].unsqueeze(-1)   # (batch, seq_len, 1)
+summed = (out.last_hidden_state * mask).sum(1)
+counts = mask.sum(1).clamp(min=1e-9)
+embeddings = summed / counts                 # (batch, hidden) — one vector per sentence
+
+# 4) Cosine similarity: the two paraphrases should score high despite different words.
+a, b = torch.nn.functional.normalize(embeddings, dim=1)
+print("cosine similarity:", float(a @ b))    # ~0.7+ — semantic match, not word overlap
+</code></pre>
+    </div>
+
+    <div class="callout">
+      <div class="callout__title">Where to go next</div>
+      You have tokens and embeddings — the input to the architecture that actually does the reasoning:
+      <a href="p1-transformers.html">Transformers &amp; Self-Attention</a>.
+    </div>
+
+    <nav class="pagenav" id="pageNav" aria-label="Page navigation"></nav>
+
+    <div class="sitefoot">cb-ml · Part 1 · Foundations &amp; Concepts</div>
+  </main>
+</body>
+</html>
