@@ -1,0 +1,303 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Problem → Solution · cb-ml</title>
+  <meta name="description" content="Case studies mapping a real problem to why plain algorithms fail and which ML/GenAI combination solves it — semantic search, RAG, triage, fraud, forecasting, extraction — plus system-design talking points.">
+  <script>(function(){try{var t=localStorage.getItem('cbml-theme');if(t)document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+  <link rel="stylesheet" href="assets/styles.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+  <script defer src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+  <script defer src="assets/app.js"></script>
+</head>
+<body>
+  <a class="skip" href="#main">Skip to content</a>
+
+  <header class="topbar">
+    <button id="menuBtn" class="iconbtn" aria-label="Open navigation" aria-expanded="false">☰</button>
+    <a class="topbar__brand" href="index.html"><span class="logo">ml</span> cb-ml</a>
+    <span class="topbar__spacer"></span>
+    <button id="themeBtn" class="iconbtn" aria-label="Toggle theme">☾</button>
+  </header>
+
+  <aside id="drawer" class="drawer" aria-label="Site navigation">
+    <div class="drawer__head">
+      <span class="logo">ml</span>
+      <div><div class="drawer__title">cb-ml</div><div class="drawer__sub">AI/ML · GenAI interview prep</div></div>
+    </div>
+    <nav id="drawerNav"></nav>
+  </aside>
+  <div id="scrim" class="scrim"></div>
+
+  <main id="main">
+    <span class="eyebrow">Part 4 · Production &amp; Problem-Solving</span>
+    <h1>Problem → Solution</h1>
+    <p class="lede">
+      The FDE’s core skill, and how senior interviews are framed: given a messy business problem,
+      <em>scope</em> it — why won’t a plain algorithm do, which model (or combination) fits, and how do
+      the pieces connect end to end. This page is a set of worked case studies you can pattern-match
+      against, each following the same shape: <strong>problem → why plain code fails → the ML/GenAI
+      solution</strong>.
+    </p>
+
+    <div class="callout ladder">
+      <div class="callout__title">Where this sits on the ladder</div>
+      <strong>This is the ladder applied.</strong> Every case starts by asking whether a cheaper rung
+      works, then climbs only as far as needed — and the best solutions often <em>combine</em> rungs
+      (a cheap classifier routing to an expensive LLM). Naming the combination, with its cost/latency
+      tradeoffs, is what a customer is paying an FDE to do.
+      <div class="chips">
+        <span class="chip">scope the problem</span>
+        <span class="chip">combine rungs</span>
+        <span class="chip cost">justify the cost</span>
+      </div>
+    </div>
+
+    <nav class="toc" aria-label="On this page">
+      <div class="toc__title">On this page</div>
+      <ol>
+        <li><a href="#method">The scoping method</a></li>
+        <li><a href="#search">Case: semantic search</a></li>
+        <li><a href="#docqa">Case: document Q&amp;A</a></li>
+        <li><a href="#triage">Case: support triage (combo)</a></li>
+        <li><a href="#fraud">Case: fraud detection</a></li>
+        <li><a href="#extract">Case: document extraction</a></li>
+        <li><a href="#sysdesign">System-design talking points</a></li>
+        <li><a href="#qa">Interview Q&amp;A</a></li>
+        <li><a href="#code">Code: a hybrid triage router</a></li>
+      </ol>
+    </nav>
+
+    <!-- ===== Method ===== -->
+    <h2 id="method">The scoping method</h2>
+    <p>
+      For any problem, walk the same four steps out loud — it’s exactly what an interviewer wants to hear:
+    </p>
+    <ol>
+      <li><strong>Frame it</strong> — what’s the actual input, output, and success metric? (classification? ranking? generation?)</li>
+      <li><strong>Try to break it with rules</strong> — why can’t deterministic code solve this? Name the reason (fuzzy meaning, unstructured input, too many patterns).</li>
+      <li><strong>Pick the rung(s)</strong> — the cheapest model(s) that fit the data type and the metric; often a <em>combination</em>.</li>
+      <li><strong>Wire it &amp; guard it</strong> — the pipeline, the latency/cost budget, the failure modes, and how you’d evaluate it.</li>
+    </ol>
+
+    <!-- ===== Search ===== -->
+    <h2 id="search">Case: “Search that understands meaning”</h2>
+    <p>
+      <strong>Problem:</strong> users search a help center but keyword search misses “I can’t sign in”
+      when the article says “authentication failure.”<br>
+      <strong>Why plain code fails:</strong> keyword/`LIKE` matching is lexical — it can’t see that two
+      different phrasings mean the same thing.<br>
+      <strong>Solution:</strong> <strong>embeddings + ANN vector search</strong> (rung 4 infra, no LLM
+      needed). Embed articles and the query into the same space; return nearest neighbors by meaning.
+      Add keyword (hybrid) search so exact terms and IDs still match.
+    </p>
+    <div class="callout deeper">
+      <div class="callout__title">Note the restraint</div>
+      No LLM required — this is solved by embeddings + a vector index. Reaching for a chat model here
+      would add cost and latency for nothing. (See <a href="p2-vector-db-embeddings.html">Vector DBs</a>.)
+    </div>
+
+    <!-- ===== Doc QA ===== -->
+    <h2 id="docqa">Case: “Answer questions from our documents”</h2>
+    <p>
+      <strong>Problem:</strong> employees ask natural-language questions that require synthesizing an
+      answer from internal policy docs.<br>
+      <strong>Why plain code (or search alone) fails:</strong> search returns <em>documents</em>; the
+      user wants a synthesized <em>answer</em> with the right facts, phrased for their question.<br>
+      <strong>Why not just an LLM:</strong> it doesn’t know your private docs and will hallucinate.<br>
+      <strong>Solution:</strong> <strong>RAG</strong> — retrieve the relevant chunks (the search case
+      above) and have an LLM answer <em>from</em> them, with citations. Combination of rung-4 infra
+      (retrieval) + rung-4 generation. (See <a href="p2-rag.html">RAG</a>.)
+    </p>
+
+    <!-- ===== Triage (combo) ===== -->
+    <h2 id="triage">Case: “Route 10,000 support tickets a day” (a combination)</h2>
+    <p>
+      <strong>Problem:</strong> classify each ticket’s urgency and department, and draft a reply.<br>
+      <strong>Why one tool doesn’t fit:</strong> classification is high-volume and cheap; reply-drafting
+      needs generation. Using an LLM for <em>everything</em> is slow and expensive; using a classifier
+      for <em>everything</em> can’t write.<br>
+      <strong>Solution — combine rungs:</strong> a cheap <strong>classifier</strong> (fine-tuned SLM or
+      even classical ML on ticket features) handles routing at volume; only tickets that need a reply go
+      to an <strong>LLM + RAG</strong> for a grounded draft. Cheapest tool per sub-task.
+    </p>
+
+    <div class="figure">
+      <svg viewBox="0 0 440 180" role="img" aria-label="Support triage pipeline: a cheap classifier routes tickets; only some go to an expensive LLM">
+        <defs><marker id="ps" markerWidth="9" markerHeight="9" refX="5" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#38bdf8"/></marker></defs>
+        <g font-family="monospace" font-size="10" text-anchor="middle">
+          <rect x="14" y="72" width="70" height="34" rx="8" fill="var(--surface-2,#1c2333)" stroke="var(--border,#3a4457)"/><text x="49" y="93" fill="var(--text,#e6edf3)">ticket</text>
+          <!-- cheap classifier -->
+          <rect x="120" y="70" width="94" height="38" rx="9" fill="var(--surface-2,#1c2333)" stroke="#3fb950"/><text x="167" y="86" fill="#3fb950" font-weight="700">classifier</text><text x="167" y="99" fill="var(--text-muted,#9aa7b8)" font-size="8">cheap · CPU/SLM</text>
+          <!-- branch simple -->
+          <rect x="260" y="20" width="150" height="34" rx="8" fill="var(--surface-2,#1c2333)" stroke="#3fb950"/><text x="335" y="41" fill="#3fb950">auto-route (most)</text>
+          <!-- branch needs reply -->
+          <rect x="260" y="80" width="150" height="38" rx="9" fill="var(--accent-soft,#2b2f55)" stroke="#f0b429"/><text x="335" y="96" fill="#f0b429" font-weight="700">LLM + RAG draft</text><text x="335" y="109" fill="var(--text-muted,#9aa7b8)" font-size="8">only when needed · $$</text>
+          <rect x="260" y="134" width="150" height="30" rx="8" fill="var(--surface-2,#1c2333)" stroke="#3fb950"/><text x="335" y="153" fill="#3fb950">human review (risky)</text>
+        </g>
+        <g stroke="#38bdf8" fill="none" class="anim-flow">
+          <line x1="84" y1="89" x2="118" y2="89" marker-end="url(#ps)"/>
+          <path d="M214,80 C240,60 245,45 258,40" marker-end="url(#ps)"/>
+          <line x1="214" y1="92" x2="258" y2="96" marker-end="url(#ps)"/>
+          <path d="M214,100 C240,120 245,140 258,148" marker-end="url(#ps)"/>
+        </g>
+      </svg>
+      <div class="figure__cap">The cheap model does the bulk work; the expensive model is reserved for the fraction that truly needs it. That routing pattern is the heart of cost-effective GenAI systems.</div>
+    </div>
+
+    <!-- ===== Fraud ===== -->
+    <h2 id="fraud">Case: “Catch fraudulent transactions”</h2>
+    <p>
+      <strong>Problem:</strong> flag fraud in real time from tabular transaction data.<br>
+      <strong>Why plain rules fall short:</strong> hand-written rules (“flag &gt; $5000 abroad”) are gamed
+      and miss novel patterns — though they’re still a useful first filter.<br>
+      <strong>Solution:</strong> tabular + labeled history → <strong>gradient-boosted trees</strong>
+      (rung 2, CPU, fast, interpretable) for known fraud patterns, often combined with
+      <strong>anomaly detection</strong> for novel ones. Definitely <em>not</em> an LLM — it’s numeric,
+      latency-critical, and needs explainability for disputes. Threshold tuned by the cost of a
+      false decline vs a missed fraud (see <a href="p3-metrics-evaluation.html">Metrics</a>).
+    </p>
+
+    <!-- ===== Extraction ===== -->
+    <h2 id="extract">Case: “Pull structured data from messy documents”</h2>
+    <p>
+      <strong>Problem:</strong> turn invoices/contracts (PDFs, varied layouts) into structured fields.<br>
+      <strong>Why plain code fails:</strong> regex/templates shatter on layout variety and wording.<br>
+      <strong>Solution:</strong> an <strong>LLM with a strict output schema</strong> (rung 4) — feed the
+      text, get validated JSON (see <a href="p2-prompt-engineering.html">Prompt Engineering</a>). If
+      volume is huge and the layout is consistent, a cheaper specialized model (or a fine-tuned SLM)
+      beats calling a frontier LLM per document. Validate every field before trusting it.
+    </p>
+
+    <!-- ===== System design ===== -->
+    <h2 id="sysdesign">System-design talking points (for the whiteboard)</h2>
+    <p>
+      When asked to “design an AI system for X,” hit these dimensions — they show you think past the model:
+    </p>
+    <ul>
+      <li><strong>Data flow</strong> — ingestion, offline indexing/training vs online serving (the split you know from data engineering).</li>
+      <li><strong>The model choice</strong> — the rung(s), justified against cheaper options.</li>
+      <li><strong>Latency &amp; cost budget</strong> — p95 target, tokens/$, where caching and a cheap-model fast-path go.</li>
+      <li><strong>Evaluation</strong> — the metric, the eval set, offline vs online (A/B).</li>
+      <li><strong>Reliability</strong> — fallbacks, guardrails, monitoring/drift, rollback.</li>
+      <li><strong>Human-in-the-loop</strong> — where a person reviews high-stakes outputs.</li>
+    </ul>
+
+    <!-- ===== Q&A ===== -->
+    <h2 id="qa">Interview Q&amp;A</h2>
+
+    <details class="qa">
+      <summary class="qa__q"><span class="badge core">core</span>Design a system to answer customer questions from our knowledge base.</summary>
+      <div class="qa__a">
+        <p>
+          This is RAG. Offline: chunk the KB, embed the chunks, and index them in a vector store with
+          metadata (product, version, permissions). Online: embed the question, hybrid-retrieve the top
+          chunks, re-rank, and have an LLM answer strictly from them with citations, saying “I don’t know”
+          when unsupported. Around it: a task-specific eval set scoring faithfulness and relevance,
+          guardrails and PII handling, caching for common questions, latency/cost budgets, and monitoring.
+          I’d avoid fine-tuning facts in — RAG keeps answers fresh and citable.
+        </p>
+      </div>
+    </details>
+
+    <details class="qa">
+      <summary class="qa__q"><span class="badge trap">trap</span>Would you use an LLM to detect fraud in transactions?</summary>
+      <div class="qa__a">
+        <p>
+          No — that’s the wrong rung. Fraud detection is tabular, latency-critical, needs explainability
+          for disputes, and has labeled history, which is exactly gradient-boosted-tree territory (often
+          with anomaly detection for novel patterns). An LLM would be slower, costlier, non-deterministic,
+          and weaker on numeric features. I might use an LLM only to enrich features from free-text fields,
+          but the decision model stays a tree. Picking the cheap, interpretable rung here is the correct
+          call.
+        </p>
+      </div>
+    </details>
+
+    <details class="qa">
+      <summary class="qa__q"><span class="badge senior">senior</span>How would you keep an LLM feature affordable at 10,000 requests/day?</summary>
+      <div class="qa__a">
+        <p>
+          Reserve the expensive model for the requests that need it. Put a cheap classifier or router
+          first so simple/known cases are handled by rules, a small model, or a cache; only the hard
+          fraction hits the big LLM. Add prompt/semantic caching for repeats, cap tokens, use a smaller or
+          fine-tuned model where quality allows, and batch where possible. The pattern is a cost pyramid:
+          cheap tools handle volume, the LLM handles the tail — combining rungs instead of using the
+          costliest one everywhere.
+        </p>
+      </div>
+    </details>
+
+    <details class="qa">
+      <summary class="qa__q"><span class="badge core">core</span>A client wants “AI-powered search.” What do you actually build?</summary>
+      <div class="qa__a">
+        <p>
+          Usually semantic search with embeddings and a vector index — often no LLM at all. Embed
+          documents and queries into the same space and return nearest neighbors by meaning, combined with
+          keyword (hybrid) search so exact terms and IDs still match, plus a re-ranker for precision. If
+          they actually want synthesized answers rather than a list of results, that’s a step up to RAG.
+          I’d clarify which they need, because the cheaper embedding-only version solves a lot of
+          “AI search” asks.
+        </p>
+      </div>
+    </details>
+
+    <details class="qa">
+      <summary class="qa__q"><span class="badge senior">senior</span>When is combining models better than a single one?</summary>
+      <div class="qa__a">
+        <p>
+          When sub-tasks have different cost/quality profiles. A cheap classifier routing to an expensive
+          generator (support triage), rules pre-filtering before a model (fraud), or a retriever feeding a
+          generator (RAG) all let each component do what it’s best and cheapest at. The alternative —
+          one big model doing everything — is simpler but usually slower, pricier, and less controllable.
+          The art is decomposing the problem so the expensive rung only runs where it must.
+        </p>
+      </div>
+    </details>
+
+    <!-- ===== Code ===== -->
+    <h2 id="code">Code: a hybrid triage router</h2>
+    <p>
+      The combination pattern in code: a cheap check handles the easy majority; the expensive LLM only
+      runs on what’s left. This structure is most of cost-effective GenAI engineering.
+    </p>
+
+    <div class="codewrap">
+      <div class="codewrap__bar"><span class="codewrap__lang">python</span><span>cheap-first routing: rules → classifier → LLM only when needed</span><button class="copybtn" type="button">Copy</button></div>
+<pre><code class="language-python"># Combine rungs: reserve the expensive LLM for the fraction that truly needs it.
+def handle_ticket(ticket: dict) -> dict:
+    text = ticket["text"]
+
+    # --- Rung 1: rules catch the obvious, for free. ---------------------------
+    if any(k in text.lower() for k in ("refund", "cancel", "password reset")):
+        return {"route": "self-service", "cost": 0}          # deflected, no model
+
+    # --- Rung 2: a cheap classifier routes the bulk (CPU / small model). ------
+    priority = classifier.predict([featurize(text)])[0]      # milliseconds, ~$0
+    if priority in ("P2", "P3"):
+        return {"route": f"queue-{priority}", "cost": 0}     # routed, still no LLM
+
+    # --- Rung 4: ONLY urgent tickets get an LLM + RAG drafted reply. -----------
+    context = retrieve(text)                                  # RAG: grounding docs
+    draft = call_llm(system="Draft a support reply using ONLY the context.",
+                     user=f"{text}\n\nContext:\n{context}")   # $$ per call
+    return {"route": "agent-review", "draft": draft, "cost": "$$"}
+
+# Most tickets never reach the LLM. You spent the least compute that solved each
+# case — and can point to exactly why each tier exists. That's the FDE answer.
+</code></pre>
+    </div>
+
+    <div class="callout">
+      <div class="callout__title">The pattern to remember</div>
+      Great AI systems are rarely one model — they’re a <strong>pipeline that spends the least on each
+      sub-task</strong>. Start from the problem, break it into pieces, and put the cheapest rung that
+      works on each. That instinct is the whole job.
+    </div>
+
+    <nav class="pagenav" id="pageNav" aria-label="Page navigation"></nav>
+    <div class="sitefoot">cb-ml · Part 4 · Production &amp; Problem-Solving</div>
+  </main>
+</body>
+</html>
