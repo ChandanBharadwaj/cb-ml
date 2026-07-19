@@ -1,0 +1,383 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>When to Use ML — the Ladder · cb-ml</title>
+  <meta name="description" content="The escalation ladder: algorithm → classical ML → deep learning → LLM. An interactive decision walker plus the questions at each rung — how to pick the cheapest tool that actually works.">
+  <script>(function(){try{var t=localStorage.getItem('cbml-theme');if(t)document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+  <link rel="stylesheet" href="assets/styles.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+  <script defer src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+  <script defer src="assets/app.js"></script>
+</head>
+<body>
+  <a class="skip" href="#main">Skip to content</a>
+
+  <header class="topbar">
+    <button id="menuBtn" class="iconbtn" aria-label="Open navigation" aria-expanded="false">☰</button>
+    <a class="topbar__brand" href="index.html"><span class="logo">ml</span> cb-ml</a>
+    <span class="topbar__spacer"></span>
+    <button id="themeBtn" class="iconbtn" aria-label="Toggle theme">☾</button>
+  </header>
+
+  <aside id="drawer" class="drawer" aria-label="Site navigation">
+    <div class="drawer__head">
+      <span class="logo">ml</span>
+      <div><div class="drawer__title">cb-ml</div><div class="drawer__sub">AI/ML · GenAI interview prep</div></div>
+    </div>
+    <nav id="drawerNav"></nav>
+  </aside>
+  <div id="scrim" class="scrim"></div>
+
+  <main id="main">
+    <span class="eyebrow">Part 4 · Production &amp; Problem-Solving</span>
+    <h1>When to Use ML — the Ladder</h1>
+    <p class="lede">
+      The spine of this whole site, and the most valuable instinct you can bring to an interview or a
+      customer: <strong>use the cheapest tool that actually works.</strong> Don’t reach for a model
+      because it’s exciting — climb only as high as the problem forces you. This page turns that instinct
+      into a repeatable decision process.
+    </p>
+
+    <div class="callout ladder">
+      <div class="callout__title">The one principle</div>
+      Can a plain <strong>algorithm / rules</strong> solve it? → if no, can <strong>classical ML</strong>?
+      (cheap, CPU, interpretable) → if not enough, <strong>deep learning</strong>? → only then an
+      <strong>LLM</strong>? And at every rung: <strong>CPU or GPU? what’s the cost &amp; latency?</strong>
+    </div>
+
+    <nav class="toc" aria-label="On this page">
+      <div class="toc__title">On this page</div>
+      <ol>
+        <li><a href="#walker">Decision walker (interactive)</a></li>
+        <li><a href="#rungs">The four rungs in detail</a></li>
+        <li><a href="#questions">The questions to ask</a></li>
+        <li><a href="#within-llm">The sub-ladder inside “LLM”</a></li>
+        <li><a href="#buy-build">Buy vs build</a></li>
+        <li><a href="#qa">Interview Q&amp;A</a></li>
+        <li><a href="#code">Code: climb the ladder</a></li>
+      </ol>
+    </nav>
+
+    <!-- ===== Interactive walker ===== -->
+    <h2 id="walker">Decision walker — answer to find your rung</h2>
+    <p>
+      Work a real problem through it. Each answer takes you one step; the result names the rung, the
+      compute, and the rough cost — and why you stopped there.
+    </p>
+
+    <div class="figure" style="text-align:left">
+      <div id="walkQ" style="font-weight:700;font-size:1.02rem;margin-bottom:12px"></div>
+      <div id="walkA" style="display:flex;flex-direction:column;gap:8px"></div>
+      <div id="walkResult" style="display:none"></div>
+      <div id="walkPath" style="font-size:.75rem;color:var(--text-muted);margin-top:12px"></div>
+      <div style="margin-top:12px">
+        <button id="walkRestart" class="btn secondary" type="button" style="display:none">↺ Start over</button>
+      </div>
+    </div>
+
+    <!-- ===== Rungs ===== -->
+    <h2 id="rungs">The four rungs in detail</h2>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>Rung</th><th>Reach here when</th><th>Compute · cost</th></tr></thead>
+        <tbody>
+          <tr><td><strong>1 · Algorithm / rules</strong></td><td>The rule is stateable &amp; stable (formula, thresholds, lookup, sort)</td><td>CPU · ~free</td></tr>
+          <tr><td><strong>2 · Classical ML</strong></td><td>Tabular data, a pattern you can’t hand-write, labels available; want interpretability</td><td>CPU · cheap</td></tr>
+          <tr><td><strong>3 · Deep learning</strong></td><td>Unstructured data (images/audio/signals) with lots of labels; classical ML plateaus</td><td>GPU · $$</td></tr>
+          <tr><td><strong>4 · LLM / GenAI</strong></td><td>Language understanding/generation, few labels, need zero/few-shot generality</td><td>GPU / API · $/token</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="callout deeper">
+      <div class="callout__title">Why “cheapest that works” wins</div>
+      Lower rungs are cheaper to run, faster, easier to explain, simpler to monitor, and less likely to
+      hallucinate. A gradient-boosted tree answering in microseconds on a CPU beats an LLM that needs a
+      GPU and a bag of inference tricks — <em>when it clears the bar</em>. The skill is knowing when it does.
+    </div>
+
+    <!-- ===== Questions ===== -->
+    <h2 id="questions">The questions to ask (before any code)</h2>
+    <ul>
+      <li><strong>Can I state the rule?</strong> If the logic is expressible, write it — rung 1. No data, no model, no drift.</li>
+      <li><strong>Is there really a pattern, and enough data to learn it?</strong> No pattern or no data → ML won’t help; get data or use rules.</li>
+      <li><strong>Structured or unstructured?</strong> Tabular → classical ML first. Text/image/audio → DL or LLM.</li>
+      <li><strong>What does an error cost?</strong> High-stakes/regulated → favor interpretable models and lower rungs.</li>
+      <li><strong>Is the cheaper rung good enough?</strong> Always baseline the rung below before climbing.</li>
+      <li><strong>CPU or GPU? What’s the latency/cost budget?</strong> A GPU-only solution may be a non-starter for the customer — that alone can decide the rung.</li>
+    </ul>
+
+    <!-- ===== Within LLM ===== -->
+    <h2 id="within-llm">The sub-ladder inside “LLM”</h2>
+    <p>
+      Even once you’re at rung 4, keep climbing cheapest-first — this is the decision that comes up most
+      in modern interviews:
+    </p>
+    <div class="figure">
+      <svg viewBox="0 0 420 130" role="img" aria-label="Within LLMs, escalate from prompting to RAG to fine-tuning in order of cost">
+        <defs><marker id="w" markerWidth="9" markerHeight="9" refX="5" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#9aa7b8"/></marker></defs>
+        <g font-family="monospace" font-size="11" text-anchor="middle">
+          <rect x="20"  y="50" width="100" height="40" rx="9" fill="var(--surface-2,#1c2333)" stroke="#3fb950"/>
+          <text x="70" y="68" fill="#3fb950" font-weight="700">Prompt</text>
+          <text x="70" y="82" fill="var(--text-muted,#9aa7b8)" font-size="9">free · instant</text>
+
+          <rect x="160" y="50" width="100" height="40" rx="9" fill="var(--surface-2,#1c2333)" stroke="#38bdf8"/>
+          <text x="210" y="68" fill="#38bdf8" font-weight="700">+ RAG</text>
+          <text x="210" y="82" fill="var(--text-muted,#9aa7b8)" font-size="9">add knowledge</text>
+
+          <rect x="300" y="50" width="100" height="40" rx="9" fill="var(--surface-2,#1c2333)" stroke="#f0b429"/>
+          <text x="350" y="68" fill="#f0b429" font-weight="700">Fine-tune</text>
+          <text x="350" y="82" fill="var(--text-muted,#9aa7b8)" font-size="9">change weights</text>
+        </g>
+        <line x1="120" y1="70" x2="158" y2="70" stroke="#9aa7b8" marker-end="url(#w)" class="anim-flow"/>
+        <line x1="260" y1="70" x2="298" y2="70" stroke="#9aa7b8" marker-end="url(#w)" class="anim-flow"/>
+        <text x="210" y="26" text-anchor="middle" font-size="11" fill="var(--text-muted,#9aa7b8)">cheapest → most expensive · try in this order</text>
+        <text x="210" y="115" text-anchor="middle" font-size="10" fill="var(--text-muted,#9aa7b8)">need instructions? prompt · need facts? RAG · need behavior at scale? fine-tune</text>
+      </svg>
+      <div class="figure__cap">Prompt (instructions) → RAG (knowledge) → fine-tune (behavior). Most “we need to fine-tune” problems are solved a rung earlier.</div>
+    </div>
+
+    <!-- ===== Buy vs build ===== -->
+    <h2 id="buy-build">Buy vs build</h2>
+    <p>
+      Orthogonal to the ladder, but the same frugality: for most GenAI features, <strong>start by
+      buying</strong> — a hosted API model gets you to value fastest. <strong>Build/self-host</strong>
+      when you have a hard constraint: data can’t leave the customer’s environment, cost at your volume
+      beats the API, you need an on-device/offline model, or you require capabilities a vendor won’t give
+      you. Don’t train from scratch unless you truly must — fine-tune or prompt an existing model first.
+    </p>
+
+    <!-- ===== Q&A ===== -->
+    <h2 id="qa">Interview Q&amp;A</h2>
+
+    <details class="qa">
+      <summary class="qa__q"><span class="badge core">core</span>A stakeholder says “let’s use AI for this.” How do you respond?</summary>
+      <div class="qa__a">
+        <p>
+          I start from the problem, not the tool, and climb the ladder. First: can we state the rule? If
+          so, plain logic is cheapest and most reliable. If not, is there a pattern and enough data — and
+          is it tabular (classical ML, likely gradient-boosted trees on a CPU) or unstructured (deep
+          learning / an LLM)? I baseline the cheapest viable rung and only climb when it can’t clear the
+          bar, weighing error cost, interpretability, latency, and whether we even need a GPU. “AI” is an
+          outcome, not a requirement.
+        </p>
+      </div>
+    </details>
+
+    <details class="qa">
+      <summary class="qa__q"><span class="badge trap">trap</span>When should you NOT use machine learning at all?</summary>
+      <div class="qa__a">
+        <p>
+          When the rule is explicitly stateable (use code/logic — cheaper, exact, debuggable); when there’s
+          no real pattern or not enough quality data to learn one; when a mistake’s cost demands full
+          determinism/explainability that a model can’t give; or when the operational burden (data
+          pipelines, monitoring, drift, GPUs) outweighs the benefit. ML earns its complexity only when the
+          pattern is real, learnable, and not economically expressible as rules.
+        </p>
+      </div>
+    </details>
+
+    <details class="qa">
+      <summary class="qa__q"><span class="badge core">core</span>Why start with a simple model / baseline?</summary>
+      <div class="qa__a">
+        <p>
+          A simple baseline (rules, logistic regression, gradient-boosted trees) is fast to build, sets the
+          bar the fancy model must beat, is easy to explain and deploy, and often turns out to be good
+          enough — saving a lot of cost and time. It also surfaces data problems early. You only justify a
+          heavier model by showing it meaningfully beats the baseline on a metric that matters, not because
+          it’s more sophisticated.
+        </p>
+      </div>
+    </details>
+
+    <details class="qa">
+      <summary class="qa__q"><span class="badge senior">senior</span>Tabular data with 50k rows — LLM or gradient-boosted trees?</summary>
+      <div class="qa__a">
+        <p>
+          Gradient-boosted trees, almost certainly. On structured/tabular data they typically match or beat
+          deep learning and LLMs, train in seconds on a CPU, are interpretable, and are trivial to deploy
+          and monitor. An LLM here is slower, pricier, harder to make deterministic, and usually less
+          accurate on numeric features. I’d only consider an LLM if the task needed free-text understanding
+          the columns can’t capture — and even then I’d likely use it to create features for the tree.
+        </p>
+      </div>
+    </details>
+
+    <details class="qa">
+      <summary class="qa__q"><span class="badge senior">senior</span>Within an LLM solution, how do you decide prompt vs RAG vs fine-tune?</summary>
+      <div class="qa__a">
+        <p>
+          In cost order. Prompt engineering first — it’s free and instant, and fixes most “vague behavior”
+          issues. If the gap is missing knowledge (private/fresh facts, needs citations), that’s RAG.
+          Fine-tune only when you need consistent behavior/format/tone at scale, a specialized skill, or to
+          shrink a big model into a cheaper specialized one — and it doesn’t add facts well, so it’s not
+          the fix for “doesn’t know our data.” They also compose: fine-tune behavior, RAG knowledge.
+        </p>
+      </div>
+    </details>
+
+    <details class="qa">
+      <summary class="qa__q"><span class="badge senior">senior</span>How does “must run on CPU / on-device” change your choice?</summary>
+      <div class="qa__a">
+        <p>
+          It can decide the rung outright. A GPU-only solution may be a non-starter at a customer with no
+          GPUs or strict data-residency, so I’d bias toward lower rungs: classical ML runs happily on CPU;
+          if I need a language model, a small quantized SLM can run on-device or on-prem. The compute and
+          deployment constraint is a first-class input to the decision, not an afterthought — sometimes the
+          “best” model is the one that fits where it has to run.
+        </p>
+      </div>
+    </details>
+
+    <!-- ===== Code ===== -->
+    <h2 id="code">Code: climb the ladder, logging cost/compute</h2>
+    <p>
+      The disciplined workflow in code: try each rung, stop at the first that clears the bar, and record
+      what it costs. This is the habit that keeps solutions cheap.
+    </p>
+
+    <div class="codewrap">
+      <div class="codewrap__bar"><span class="codewrap__lang">python</span><span>baseline-first: rules → GBM → (only if needed) an LLM</span><button class="copybtn" type="button">Copy</button></div>
+<pre><code class="language-python"># Climb the ladder: try the cheapest rung first, stop as soon as it clears the bar.
+TARGET = 0.90            # the accuracy the business needs
+# (metrics/evaluation page shows how to choose this threshold honestly)
+
+# --- Rung 1: rules. CPU, ~free, instant, fully explainable. -----------------
+def rules_baseline(rows):
+    # e.g. flag as urgent if it literally contains a known outage keyword.
+    return [("URGENT" if "down" in r["text"].lower() else "NORMAL") for r in rows]
+
+acc = evaluate(rules_baseline, test)          # your eval harness
+print(f"rung1 rules      acc={acc:.2f}  compute=CPU  cost=$0")
+if acc >= TARGET:
+    ship("rules"); raise SystemExit           # stop! no model needed.
+
+# --- Rung 2: classical ML. CPU, cheap, interpretable. -----------------------
+from sklearn.ensemble import HistGradientBoostingClassifier
+gbm = HistGradientBoostingClassifier().fit(X_train, y_train)   # seconds on a CPU
+acc = gbm.score(X_test, y_test)
+print(f"rung2 GBM        acc={acc:.2f}  compute=CPU  cost=~$")
+if acc >= TARGET:
+    ship("gbm"); raise SystemExit             # stop! no GPU, no LLM.
+
+# --- Rung 4: only now reach for an LLM. GPU/API, $/token. -------------------
+# (rung 3 deep learning would go here for image/audio problems)
+def llm_classifier(rows):
+    return [call_llm(r["text"]) for r in rows]   # per-call cost + latency
+acc = evaluate(llm_classifier, test)
+print(f"rung4 LLM        acc={acc:.2f}  compute=GPU/API  cost=$$$ per call")
+ship("llm")   # justified ONLY because the cheaper rungs missed the bar.
+
+# The log tells the story an interviewer/customer wants: you spent the least
+# compute and money that met the requirement — and can prove why.
+</code></pre>
+    </div>
+
+    <div class="callout">
+      <div class="callout__title">The instinct to internalize</div>
+      Every problem starts at the bottom of the ladder. You climb <em>only</em> when the rung below
+      provably can’t clear the bar — and you can always say why you stopped where you did. That sentence
+      is what makes you sound senior.
+    </div>
+
+    <nav class="pagenav" id="pageNav" aria-label="Page navigation"></nav>
+    <div class="sitefoot">cb-ml · Part 4 · Production &amp; Problem-Solving</div>
+  </main>
+
+  <!-- ===== Page-specific: interactive decision walker ===== -->
+  <script>
+    (function () {
+      var TREE = {
+        start: {
+          q: "Can you state the rule explicitly? (a formula, thresholds, a lookup, a sort)",
+          a: [ {t: "Yes — the logic is expressible", go: "r1"},
+               {t: "No — the pattern is too complex to hand-write", go: "q_data"} ],
+        },
+        q_data: {
+          q: "Where does the signal live?",
+          a: [ {t: "Tabular / structured (rows & columns)", go: "q_labels"},
+               {t: "Text / language", go: "q_know"},
+               {t: "Images / audio / sensor signals", go: "r3"} ],
+        },
+        q_labels: {
+          q: "Do you have labeled examples to learn from?",
+          a: [ {t: "Yes — labeled outcomes", go: "r2"},
+               {t: "No — just need to find structure", go: "r2u"} ],
+        },
+        q_know: {
+          q: "Does answering require YOUR private or fresh knowledge?",
+          a: [ {t: "Yes — our docs / data / recent facts", go: "r4rag"},
+               {t: "No — general language ability", go: "q_behavior"} ],
+        },
+        q_behavior: {
+          q: "Is a good prompt enough, or do you need consistent behavior/format at scale?",
+          a: [ {t: "A prompt should do it", go: "r4prompt"},
+               {t: "Consistent behavior at scale / a narrow skill", go: "r4ft"} ],
+        },
+        // ---- results ----
+        r1:  res("Rung 1 · Plain algorithm / rules",
+                 "If you can state the rule, nothing beats plain logic — exact, instant, debuggable, no data or drift. Don’t build a model.",
+                 ['<span class="chip cpu">CPU</span>','<span class="chip cost">~free</span>']),
+        r2:  res("Rung 2 · Classical ML (gradient-boosted trees)",
+                 "Tabular + labels is XGBoost/LightGBM territory: strong accuracy, CPU-fast, interpretable. Baseline this before anything heavier.",
+                 ['<span class="chip cpu">CPU</span>','<span class="chip cost">cheap</span>']),
+        r2u: res("Rung 2 · Unsupervised (clustering / anomaly detection)",
+                 "No labels but structured data → clustering, or anomaly/outlier detection. Still cheap and CPU-friendly.",
+                 ['<span class="chip cpu">CPU</span>','<span class="chip cost">cheap</span>']),
+        r3:  res("Rung 3 · Deep learning",
+                 "Unstructured data (images/audio/signals) with enough labels is where deep nets earn their cost. Training wants a GPU.",
+                 ['<span class="chip gpu">GPU (train)</span>','<span class="chip cost">$$</span>']),
+        r4rag: res("Rung 4 · LLM + RAG",
+                 "Language task that needs your knowledge → an LLM grounded with retrieval. Cheaper and fresher than fine-tuning facts in.",
+                 ['<span class="chip gpu">GPU / API</span>','<span class="chip cost">$/token</span>']),
+        r4prompt: res("Rung 4 · LLM + prompt engineering",
+                 "General language task → start with a well-engineered prompt on a hosted model. The cheapest LLM lever; climb only if it falls short.",
+                 ['<span class="chip gpu">GPU / API</span>','<span class="chip cost">$/token</span>']),
+        r4ft: res("Rung 4 · LLM + fine-tuning",
+                 "Need consistent behavior/format at scale (or to shrink a big model) → fine-tune, ideally LoRA/QLoRA. The most expensive lever — prove prompt & RAG weren’t enough first.",
+                 ['<span class="chip gpu">GPU train + serve</span>','<span class="chip cost">$$$</span>']),
+      };
+      function res(title, body, chips) { return { result: true, title: title, body: body, chips: chips }; }
+
+      var qEl = document.getElementById("walkQ");
+      var aEl = document.getElementById("walkA");
+      var rEl = document.getElementById("walkResult");
+      var pEl = document.getElementById("walkPath");
+      var restart = document.getElementById("walkRestart");
+      var path = [];
+
+      function show(nodeKey) {
+        var node = TREE[nodeKey];
+        if (node.result) {
+          qEl.style.display = "none"; aEl.style.display = "none";
+          rEl.style.display = "block";
+          rEl.className = "callout ladder";
+          rEl.innerHTML = '<div class="callout__title">' + node.title + '</div>' + node.body +
+                          '<div class="chips">' + node.chips.join("") + "</div>";
+          restart.style.display = "inline-block";
+        } else {
+          qEl.style.display = "block"; aEl.style.display = "flex"; rEl.style.display = "none";
+          qEl.textContent = node.q;
+          aEl.innerHTML = "";
+          node.a.forEach(function (opt) {
+            var b = document.createElement("button");
+            b.className = "btn secondary"; b.type = "button"; b.textContent = opt.t;
+            b.style.textAlign = "left";
+            b.addEventListener("click", function () {
+              path.push(opt.t);
+              pEl.textContent = "Your path: " + path.join("  →  ");
+              show(opt.go);
+            });
+            aEl.appendChild(b);
+          });
+        }
+      }
+      restart.addEventListener("click", function () {
+        path = []; pEl.textContent = ""; restart.style.display = "none"; show("start");
+      });
+      show("start");
+    })();
+  </script>
+</body>
+</html>

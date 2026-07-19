@@ -41,7 +41,7 @@ Legend: `[ ]` todo · `[~]` in progress · `[x]` done
 
 ## Part 4 · Production & Problem-Solving (FDE core)
 - [x] `p4-mlops-production.html` — drift/monitoring, canary/shadow, guardrails, PII
-- [ ] `p4-when-to-use-ml.html` — **the escalation ladder** (centerpiece), CPU/GPU & cost at each rung
+- [x] `p4-when-to-use-ml.html` — **the escalation ladder** (centerpiece), CPU/GPU & cost at each rung (interactive decision walker)
 - [ ] `p4-problem-solving.html` — problem→approach case studies, ML/GenAI system design
 - [ ] `p4-multimodal.html` — VLMs/CLIP, diffusion, VQA, multimodal RAG (overview)
 
