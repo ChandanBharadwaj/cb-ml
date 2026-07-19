@@ -1,0 +1,273 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Multimodal AI · cb-ml</title>
+  <meta name="description" content="An overview of multimodal AI: vision-language models & CLIP, diffusion (text-to-image), speech, visual question answering, and multimodal RAG — how models handle images, audio, and text together.">
+  <script>(function(){try{var t=localStorage.getItem('cbml-theme');if(t)document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+  <link rel="stylesheet" href="assets/styles.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+  <script defer src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+  <script defer src="assets/app.js"></script>
+</head>
+<body>
+  <a class="skip" href="#main">Skip to content</a>
+
+  <header class="topbar">
+    <button id="menuBtn" class="iconbtn" aria-label="Open navigation" aria-expanded="false">☰</button>
+    <a class="topbar__brand" href="index.html"><span class="logo">ml</span> cb-ml</a>
+    <span class="topbar__spacer"></span>
+    <button id="themeBtn" class="iconbtn" aria-label="Toggle theme">☾</button>
+  </header>
+
+  <aside id="drawer" class="drawer" aria-label="Site navigation">
+    <div class="drawer__head">
+      <span class="logo">ml</span>
+      <div><div class="drawer__title">cb-ml</div><div class="drawer__sub">AI/ML · GenAI interview prep</div></div>
+    </div>
+    <nav id="drawerNav"></nav>
+  </aside>
+  <div id="scrim" class="scrim"></div>
+
+  <main id="main">
+    <span class="eyebrow">Part 4 · Production &amp; Problem-Solving</span>
+    <h1>Multimodal AI</h1>
+    <p class="lede">
+      Everything so far has been mostly text. <strong>Multimodal</strong> models handle images, audio,
+      and video too — and increasingly all at once. You don’t need research depth here, but you should be
+      able to explain how it works and when to reach for it. This is a breadth overview to round out your
+      map.
+    </p>
+
+    <div class="callout ladder">
+      <div class="callout__title">Where this sits on the ladder</div>
+      <strong>Rung 3–4 for non-text data.</strong> Multimodal models are the deep-learning/LLM rungs
+      applied to images and audio. The same discipline holds: for a narrow vision task a small specialized
+      model on a GPU may beat a giant multimodal LLM on cost and latency — climb only as high as the task
+      needs.
+      <div class="chips">
+        <span class="chip gpu">GPU</span>
+        <span class="chip cost">$$–$/token</span>
+        <span class="chip">images · audio · video</span>
+      </div>
+    </div>
+
+    <nav class="toc" aria-label="On this page">
+      <div class="toc__title">On this page</div>
+      <ol>
+        <li><a href="#clip">CLIP &amp; shared embedding space</a></li>
+        <li><a href="#vlm">Vision-language models (VLMs)</a></li>
+        <li><a href="#diffusion">Diffusion (text → image)</a></li>
+        <li><a href="#speech">Speech: STT &amp; TTS</a></li>
+        <li><a href="#mmrag">Multimodal RAG</a></li>
+        <li><a href="#qa">Interview Q&amp;A</a></li>
+        <li><a href="#code">Code: CLIP image/text similarity</a></li>
+      </ol>
+    </nav>
+
+    <!-- ===== CLIP ===== -->
+    <h2 id="clip">CLIP &amp; the shared embedding space</h2>
+    <p>
+      The foundational idea. <strong>CLIP</strong> trains an image encoder and a text encoder together so
+      that an image and its caption land at the <em>same point</em> in a shared embedding space. Once
+      images and text live in one space, you can compare them directly — “which of these images best
+      matches this sentence?” becomes a nearest-neighbor lookup. It’s the multimodal version of the
+      embeddings you already know.
+    </p>
+
+    <div class="figure">
+      <svg viewBox="0 0 420 190" role="img" aria-label="CLIP maps images and text into one shared embedding space where matching pairs land close together">
+        <g font-family="monospace" font-size="10" text-anchor="middle">
+          <!-- image encoder -->
+          <rect x="14" y="30" width="70" height="30" rx="7" fill="var(--surface-2,#1c2333)" stroke="#7c8cff"/><text x="49" y="50" fill="#7c8cff">🖼 image</text>
+          <rect x="14" y="130" width="70" height="30" rx="7" fill="var(--surface-2,#1c2333)" stroke="#38bdf8"/><text x="49" y="150" fill="#38bdf8">“a cat”</text>
+          <rect x="104" y="30" width="70" height="30" rx="7" fill="none" stroke="var(--border-strong,#3a4457)"/><text x="139" y="50" fill="var(--text-muted,#9aa7b8)">img enc</text>
+          <rect x="104" y="130" width="70" height="30" rx="7" fill="none" stroke="var(--border-strong,#3a4457)"/><text x="139" y="150" fill="var(--text-muted,#9aa7b8)">txt enc</text>
+        </g>
+        <!-- shared space box -->
+        <rect x="210" y="35" width="195" height="120" rx="10" fill="none" stroke="var(--border,#2a3140)"/>
+        <text x="307" y="28" text-anchor="middle" font-size="10" fill="var(--text-muted,#9aa7b8)">shared embedding space</text>
+        <!-- matching pair lands close -->
+        <circle cx="300" cy="90" r="7" fill="#7c8cff" class="anim-pulse"/>
+        <circle cx="312" cy="98" r="7" fill="#38bdf8" class="anim-pulse" style="animation-delay:.4s"/>
+        <text x="306" y="122" text-anchor="middle" font-size="9" fill="#3fb950">match → close</text>
+        <!-- a non-matching text far away -->
+        <circle cx="370" cy="55" r="6" fill="#f85149" opacity="0.7"/>
+        <text x="370" y="46" text-anchor="middle" font-size="8" fill="#f85149">“a truck”</text>
+        <!-- arrows into space -->
+        <g stroke="#9aa7b8" fill="none" class="anim-flow">
+          <path d="M174,45 C195,55 270,80 296,88"/>
+          <path d="M174,145 C195,135 285,110 308,104"/>
+        </g>
+      </svg>
+      <div class="figure__cap">CLIP pulls matching image/text pairs together and pushes mismatches apart in one shared space — so cross-modal similarity is just a dot product.</div>
+    </div>
+
+    <!-- ===== VLM ===== -->
+    <h2 id="vlm">Vision-language models (VLMs)</h2>
+    <p>
+      Modern multimodal LLMs (GPT-4o, Claude, Gemini, LLaVA) accept images <em>and</em> text in the same
+      prompt. Mechanically, an image is encoded into embeddings (“visual tokens”) that are fed into the
+      LLM alongside text tokens — so the transformer attends over both. That’s what powers
+      <strong>Visual Question Answering (VQA)</strong> — “what’s wrong in this diagram?”, reading a
+      screenshot, extracting a table from a photo. For an FDE this unlocks document/image understanding
+      without a separate vision pipeline.
+    </p>
+
+    <!-- ===== Diffusion ===== -->
+    <h2 id="diffusion">Diffusion (text → image)</h2>
+    <p>
+      Image <em>generation</em> (Stable Diffusion, DALL·E, Midjourney) works differently from LLMs.
+      <strong>Diffusion models</strong> learn to reverse a noising process: start from pure noise and
+      iteratively <em>denoise</em> it, step by step, guided by your text prompt, until a coherent image
+      emerges. So generation is not autoregressive token-by-token — it’s progressive refinement of the
+      whole image. That’s the one-line contrast interviewers look for: <strong>LLMs predict the next
+      token; diffusion models denoise toward an image.</strong>
+    </p>
+
+    <!-- ===== Speech ===== -->
+    <h2 id="speech">Speech: STT &amp; TTS</h2>
+    <ul>
+      <li><strong>Speech-to-text (STT / ASR)</strong> — transcribe audio to text (e.g. Whisper). Often
+        the front door of a voice pipeline: transcribe → process with an LLM → respond.</li>
+      <li><strong>Text-to-speech (TTS)</strong> — synthesize natural speech from text; the back door of
+        the same pipeline.</li>
+      <li>Increasingly, models are natively <strong>speech-to-speech</strong>, skipping the text
+        round-trip for lower latency in voice assistants.</li>
+    </ul>
+
+    <!-- ===== Multimodal RAG ===== -->
+    <h2 id="mmrag">Multimodal RAG</h2>
+    <p>
+      RAG isn’t limited to text. With a shared embedding space (CLIP-style) you can <strong>retrieve
+      images by a text query</strong>, or answer questions over documents that mix text, tables, charts,
+      and photos. Two common patterns: embed everything into one multimodal space and retrieve across
+      modalities; or caption/describe images with a VLM and retrieve over that text. Same RAG mechanics
+      (see <a href="p2-rag.html">RAG</a>) — just more modalities in the index.
+    </p>
+
+    <!-- ===== Q&A ===== -->
+    <h2 id="qa">Interview Q&amp;A</h2>
+
+    <details class="qa">
+      <summary class="qa__q"><span class="badge core">core</span>What is CLIP and why is it useful?</summary>
+      <div class="qa__a">
+        <p>
+          CLIP jointly trains an image encoder and a text encoder with a contrastive objective so that
+          matching image–caption pairs are close in a shared embedding space and mismatches are far apart.
+          Because images and text end up in one space, you can measure cross-modal similarity with a dot
+          product — enabling zero-shot image classification, text-to-image search, and multimodal
+          retrieval. It’s the multimodal extension of ordinary embeddings.
+        </p>
+      </div>
+    </details>
+
+    <details class="qa">
+      <summary class="qa__q"><span class="badge core">core</span>How is a diffusion model different from an LLM?</summary>
+      <div class="qa__a">
+        <p>
+          An LLM is autoregressive — it generates text one token at a time, each conditioned on the
+          previous ones. A diffusion model generates an image by starting from random noise and
+          iteratively denoising it over many steps, guided by the text prompt, refining the whole image at
+          once rather than emitting pieces sequentially. Different objective (denoising vs next-token) and
+          different output structure (whole image vs a token stream).
+        </p>
+      </div>
+    </details>
+
+    <details class="qa">
+      <summary class="qa__q"><span class="badge senior">senior</span>How do multimodal LLMs actually “see” an image?</summary>
+      <div class="qa__a">
+        <p>
+          An image is passed through a vision encoder that turns it into a sequence of embedding vectors —
+          effectively “visual tokens” — which are projected into the LLM’s embedding space and fed in
+          alongside the text tokens. The transformer then attends over both modalities together, so it can
+          reason about the image in the context of the question. The LLM isn’t processing pixels directly;
+          it’s consuming image embeddings the way it consumes word embeddings.
+        </p>
+      </div>
+    </details>
+
+    <details class="qa">
+      <summary class="qa__q"><span class="badge trap">trap</span>You need to classify 1M product images into 20 categories. Multimodal LLM?</summary>
+      <div class="qa__a">
+        <p>
+          Probably not the frontier multimodal LLM — that’s expensive and slow at that volume. For a fixed
+          set of categories with labeled data, a specialized image classifier (a fine-tuned vision model)
+          on a GPU is cheaper, faster, and likely more accurate. CLIP enables a strong zero-shot baseline
+          if you lack labels. Reserve a VLM for open-ended visual understanding, not a high-volume,
+          fixed-label classification task — the ladder applies to vision too.
+        </p>
+      </div>
+    </details>
+
+    <details class="qa">
+      <summary class="qa__q"><span class="badge senior">senior</span>How would you build search over documents that contain text and charts?</summary>
+      <div class="qa__a">
+        <p>
+          Two viable patterns. One: use a multimodal embedding model so text and images share a space, and
+          retrieve across both directly. Two (often simpler and robust): use a VLM to caption/describe each
+          image or chart, index that text alongside the document text, and run ordinary text RAG. Then a
+          multimodal LLM answers over the retrieved mix. I’d start with the caption-and-index approach for
+          reliability, and evaluate faithfulness and retrieval quality just like text RAG.
+        </p>
+      </div>
+    </details>
+
+    <!-- ===== Code ===== -->
+    <h2 id="code">Code: CLIP image/text similarity</h2>
+    <p>
+      Zero-shot classification with CLIP: encode an image and several candidate captions into the shared
+      space, and pick the closest. No training — the shared embedding space does the work.
+    </p>
+
+    <div class="codewrap">
+      <div class="codewrap__bar"><span class="codewrap__lang">python</span><span>zero-shot image classification with CLIP</span><button class="copybtn" type="button">Copy</button></div>
+<pre><code class="language-python"># CLIP: match an image against text prompts in a shared embedding space.
+# pip install transformers torch pillow
+from transformers import CLIPProcessor, CLIPModel
+from PIL import Image
+import torch
+
+model = CLIPModel.from_pretrained("openai/clip-vit-base-patch32")
+proc  = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch32")
+
+image = Image.open("photo.jpg")
+# Candidate labels as natural-language prompts (this is the "zero-shot" part).
+labels = ["a photo of a cat", "a photo of a dog", "a photo of a truck"]
+
+# Encode BOTH modalities into the same space and let CLIP score the matches.
+inputs = proc(text=labels, images=image, return_tensors="pt", padding=True)
+with torch.no_grad():
+    out = model(**inputs)
+    # logits_per_image: similarity of the image to each text prompt.
+    probs = out.logits_per_image.softmax(dim=1)[0]
+
+for label, p in sorted(zip(labels, probs.tolist()), key=lambda x: -x[1]):
+    print(f"{p:.2%}  {label}")
+# The highest-probability caption is CLIP's prediction — no labeled training data,
+# just similarity in the shared image/text space. Same idea powers text->image search.
+</code></pre>
+    </div>
+
+    <div class="callout">
+      <div class="callout__title">The takeaway</div>
+      Multimodal is the same toolbox — embeddings, transformers, RAG — extended to pixels and audio. If
+      you can explain CLIP’s shared space and “LLMs predict tokens, diffusion denoises images,” you can
+      hold your own on multimodal without going down a research rabbit hole.
+    </div>
+
+    <div class="callout deeper">
+      <div class="callout__title">🎉 You’ve reached the end of the map</div>
+      That’s every topic — foundations, building with LLMs, training/tuning/eval, and production. Head
+      back to any page from the menu, and remember the one instinct that ties it all together:
+      <strong>use the cheapest tool that actually works.</strong>
+      <a href="index.html">Back to the home page →</a>
+    </div>
+
+    <nav class="pagenav" id="pageNav" aria-label="Page navigation"></nav>
+    <div class="sitefoot">cb-ml · Part 4 · Production &amp; Problem-Solving</div>
+  </main>
+</body>
+</html>

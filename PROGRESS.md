@@ -1,13 +1,16 @@
 # Build tracker — cb-ml learning site
 
-> This file is the single source of truth for build progress across sessions.
-> It is **not** a learning plan or a study timeline — it just tracks which pages
-> are built so any session can resume cleanly.
+> ✅ **ALL 15 TOPIC PAGES COMPLETE** (Parts 1–4). The site is fully built and live at
+> https://chandanbharadwaj.github.io/cb-ml/ — every page has an animated diagram,
+> interview Q&A, and commented code, plus interactive widgets (escalation-ladder walker,
+> precision/recall threshold slider).
 >
-> **Resume protocol:** read this file → pick the next `[ ]` topic (top-down) →
-> build it fully (explanation + animated SVG + interview Q&A + commented code) →
-> commit + push to `main` → tick it here → also flip its `soon:true` flag in
-> `assets/app.js` so the drawer nav + landing cards go live.
+> This file tracks build progress across sessions. It is **not** a learning plan or study
+> timeline — just which pages are built.
+>
+> **To add/extend a page later:** build it fully (explanation + animated SVG + interview Q&A
+> + commented code) → commit + push to `main` → tick it here → flip its `soon:true` flag in
+> `assets/app.js` (if new) so the drawer nav + landing cards go live.
 
 Legend: `[ ]` todo · `[~]` in progress · `[x]` done
 
@@ -43,7 +46,7 @@ Legend: `[ ]` todo · `[~]` in progress · `[x]` done
 - [x] `p4-mlops-production.html` — drift/monitoring, canary/shadow, guardrails, PII
 - [x] `p4-when-to-use-ml.html` — **the escalation ladder** (centerpiece), CPU/GPU & cost at each rung (interactive decision walker)
 - [x] `p4-problem-solving.html` — problem→approach case studies, ML/GenAI system design
-- [ ] `p4-multimodal.html` — VLMs/CLIP, diffusion, VQA, multimodal RAG (overview)
+- [x] `p4-multimodal.html` — VLMs/CLIP, diffusion, VQA, multimodal RAG (overview)
 
 ---
 

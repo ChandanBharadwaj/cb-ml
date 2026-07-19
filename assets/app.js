@@ -63,7 +63,7 @@ window.CBML_NAV = [
       { href: "p4-problem-solving.html", title: "Problem → Solution",
         desc: "Case studies mapping a problem to the right ML/GenAI combination." },
       { href: "p4-multimodal.html", title: "Multimodal (Overview)",
-        desc: "VLMs/CLIP, diffusion, VQA, and multimodal RAG.", soon: true },
+        desc: "VLMs/CLIP, diffusion, VQA, and multimodal RAG." },
     ],
   },
 ];
