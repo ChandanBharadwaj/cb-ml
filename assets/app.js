@@ -17,7 +17,7 @@ window.CBML_NAV = [
     label: "Foundations & Concepts",
     items: [
       { href: "p1-ml-deep-learning.html", title: "ML & Deep Learning",
-        desc: "Classical baselines that still win (GBM on tabular) → neurons, backprop, optimizers. Where each sits on the ladder.", soon: true },
+        desc: "Classical baselines that still win (GBM on tabular) → neurons, backprop, optimizers. Where each sits on the ladder." },
       { href: "p1-transformers-nlp.html", title: "Transformers & NLP",
         desc: "Tokenization, embeddings, RoPE, and self-attention derived step by step — the table-stakes topic." },
       { href: "p1-genai-llm-slm.html", title: "GenAI · LLM · SLM",

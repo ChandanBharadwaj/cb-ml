@@ -23,7 +23,7 @@ Legend: `[ ]` todo · `[~]` in progress · `[x]` done
 - [ ] **User action (one-time):** enable Pages → Settings → Pages → Deploy from a branch → `main` / root
 
 ## Part 1 · Foundations & Concepts
-- [ ] `p1-ml-deep-learning.html` — classical baselines (GBM on tabular) → neurons, backprop, optimizers; GBM-vs-MLP side by side
+- [x] `p1-ml-deep-learning.html` — classical baselines (GBM on tabular) → neurons, backprop, optimizers; GBM-vs-MLP side by side
 - [x] `p1-transformers-nlp.html` — tokenization, embeddings, RoPE, self-attention, multi-head, blocks *(done in Phase 0)*
 - [ ] `p1-genai-llm-slm.html` — autoregressive generation, decoding params, LLM vs SLM tradeoffs
 
