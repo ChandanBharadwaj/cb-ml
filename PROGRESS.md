@@ -25,7 +25,7 @@ Legend: `[ ]` todo · `[~]` in progress · `[x]` done
 ## Part 1 · Foundations & Concepts
 - [x] `p1-ml-deep-learning.html` — classical baselines (GBM on tabular) → neurons, backprop, optimizers; GBM-vs-MLP side by side
 - [x] `p1-transformers-nlp.html` — tokenization, embeddings, RoPE, self-attention, multi-head, blocks *(done in Phase 0)*
-- [ ] `p1-genai-llm-slm.html` — autoregressive generation, decoding params, LLM vs SLM tradeoffs
+- [x] `p1-genai-llm-slm.html` — autoregressive generation, decoding params, LLM vs SLM tradeoffs
 
 ## Part 2 · Building with LLMs (FDE core)
 - [ ] `p2-prompt-engineering.html` — few-shot, CoT/ReAct, structured output, injection defense

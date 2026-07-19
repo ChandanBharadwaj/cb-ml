@@ -21,7 +21,7 @@ window.CBML_NAV = [
       { href: "p1-transformers-nlp.html", title: "Transformers & NLP",
         desc: "Tokenization, embeddings, RoPE, and self-attention derived step by step — the table-stakes topic." },
       { href: "p1-genai-llm-slm.html", title: "GenAI · LLM · SLM",
-        desc: "Autoregressive generation, decoding params, and the LLM-vs-SLM cost/latency trade-off.", soon: true },
+        desc: "Autoregressive generation, decoding params, and the LLM-vs-SLM cost/latency trade-off." },
     ],
   },
   {
@@ -113,6 +113,27 @@ window.CBML_NAV = [
     });
   }
 
+  /* ---- Auto-wire prev/next from the site map (built pages only) ----------
+     A page opts in with <nav class="pagenav" id="pageNav"></nav>. We link only
+     to NON-soon (built) neighbours, so forward links are never broken; when the
+     next page is flipped live, the link appears automatically. */
+  function buildPageNav() {
+    var host = doc.getElementById("pageNav");
+    if (!host) return;
+    var flat = [];
+    window.CBML_NAV.forEach(function (g) { g.items.forEach(function (it) { flat.push(it); }); });
+    var built = flat.filter(function (it) { return !it.soon; });
+    var idx = built.findIndex(function (it) { return it.href === current; });
+    if (idx === -1) return;                       // current page not in the built list
+    var prev = idx > 0 ? built[idx - 1] : { href: "index.html", title: "Home", dir: "← Home" };
+    var next = idx < built.length - 1 ? built[idx + 1] : { href: "index.html", title: "All topics", dir: "Home →" };
+    host.innerHTML =
+      '<a class="prev" href="' + prev.href + '"><div class="dir">' + (prev.dir || "← Previous") +
+        '</div><div class="ttl">' + prev.title + "</div></a>" +
+      '<a class="next" href="' + next.href + '"><div class="dir">' + (next.dir || "Next →") +
+        '</div><div class="ttl">' + next.title + "</div></a>";
+  }
+
   /* ---- Nav drawer open / close ------------------------------------------- */
   function setupDrawer() {
     var drawer = doc.getElementById("drawer");
@@ -193,6 +214,7 @@ window.CBML_NAV = [
   function init() {
     buildDrawerNav();
     buildCards();
+    buildPageNav();
     setupDrawer();
     setupTheme();
     setupCopy();
