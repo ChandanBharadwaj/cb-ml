@@ -1,0 +1,343 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Vector DBs &amp; Embeddings · cb-ml</title>
+  <meta name="description" content="How semantic search actually works: embeddings, similarity metrics, ANN indexes (HNSW/IVF), quantization, and metadata filtering — the storage engine behind RAG, with commented code.">
+  <script>(function(){try{var t=localStorage.getItem('cbml-theme');if(t)document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+  <link rel="stylesheet" href="assets/styles.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+  <script defer src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+  <script defer src="assets/app.js"></script>
+</head>
+<body>
+  <a class="skip" href="#main">Skip to content</a>
+
+  <header class="topbar">
+    <button id="menuBtn" class="iconbtn" aria-label="Open navigation" aria-expanded="false">☰</button>
+    <a class="topbar__brand" href="index.html"><span class="logo">ml</span> cb-ml</a>
+    <span class="topbar__spacer"></span>
+    <button id="themeBtn" class="iconbtn" aria-label="Toggle theme">☾</button>
+  </header>
+
+  <aside id="drawer" class="drawer" aria-label="Site navigation">
+    <div class="drawer__head">
+      <span class="logo">ml</span>
+      <div><div class="drawer__title">cb-ml</div><div class="drawer__sub">AI/ML · GenAI interview prep</div></div>
+    </div>
+    <nav id="drawerNav"></nav>
+  </aside>
+  <div id="scrim" class="scrim"></div>
+
+  <main id="main">
+    <span class="eyebrow">Part 2 · Building with LLMs</span>
+    <h1>Vector DBs &amp; Embeddings</h1>
+    <p class="lede">
+      The storage engine under RAG and semantic search. If embeddings turn meaning into geometry, a
+      vector database is what lets you find the nearest points among millions in milliseconds. This is
+      the piece that’s <em>most</em> like the data infrastructure you already run — with one new
+      primitive: similarity instead of exact match.
+    </p>
+
+    <div class="callout ladder">
+      <div class="callout__title">Where this sits on the ladder</div>
+      <strong>Infrastructure, not a model.</strong> A vector index is cheap (mostly CPU + RAM) and
+      powers rung-2-to-4 features: semantic search, RAG retrieval, dedup, recommendations,
+      clustering. It’s the enabling layer — the LLM is optional on top of it.
+      <div class="chips">
+        <span class="chip cpu">CPU + RAM</span>
+        <span class="chip cost">cheap at scale</span>
+        <span class="chip">similarity search</span>
+      </div>
+    </div>
+
+    <nav class="toc" aria-label="On this page">
+      <div class="toc__title">On this page</div>
+      <ol>
+        <li><a href="#embeddings">Embeddings: meaning as geometry</a></li>
+        <li><a href="#similarity">Similarity metrics</a></li>
+        <li><a href="#ann">Why ANN, not brute force</a></li>
+        <li><a href="#indexes">HNSW vs IVF</a></li>
+        <li><a href="#quant">Quantization &amp; dimensionality</a></li>
+        <li><a href="#metadata">Metadata filtering &amp; hybrid</a></li>
+        <li><a href="#qa">Interview Q&amp;A</a></li>
+        <li><a href="#code">Code: build &amp; query an index</a></li>
+      </ol>
+    </nav>
+
+    <!-- ===== Embeddings ===== -->
+    <h2 id="embeddings">Embeddings: meaning as geometry</h2>
+    <p>
+      An <strong>embedding</strong> is a fixed-length vector (say 384–1536 numbers) that represents the
+      <em>meaning</em> of text (or an image, or audio) as a point in high-dimensional space. The trick:
+      the model is trained so that <strong>semantically similar things land near each other</strong>.
+      “How do I reset my password?” sits close to “I forgot my login,” even with no shared words.
+    </p>
+
+    <div class="figure">
+      <svg viewBox="0 0 400 220" role="img" aria-label="Embedding space: related concepts cluster together; a query finds its nearest neighbors">
+        <rect x="10" y="10" width="380" height="200" rx="10" fill="none" stroke="var(--border,#2a3140)"/>
+        <!-- cluster 1: billing -->
+        <g fill="#7c8cff">
+          <circle cx="90" cy="60" r="6"/><circle cx="115" cy="80" r="6"/><circle cx="75" cy="95" r="6"/>
+        </g>
+        <text x="95" y="40" font-size="10" fill="#7c8cff" text-anchor="middle">billing</text>
+        <!-- cluster 2: login -->
+        <g fill="#38bdf8">
+          <circle cx="300" cy="150" r="6"/><circle cx="325" cy="130" r="6"/><circle cx="285" cy="175" r="6"/>
+        </g>
+        <text x="305" y="115" font-size="10" fill="#38bdf8" text-anchor="middle">login / auth</text>
+        <!-- cluster 3: shipping -->
+        <g fill="#3fb950">
+          <circle cx="300" cy="55" r="6"/><circle cx="320" cy="75" r="6"/>
+        </g>
+        <text x="315" y="40" font-size="10" fill="#3fb950" text-anchor="middle">shipping</text>
+        <!-- query point + neighbor links -->
+        <circle cx="305" cy="150" r="9" fill="none" stroke="#f0b429" stroke-width="2" class="anim-pulse"/>
+        <g stroke="#f0b429" stroke-width="1.4" class="anim-flow" fill="none">
+          <line x1="305" y1="150" x2="325" y2="130"/>
+          <line x1="305" y1="150" x2="285" y2="175"/>
+        </g>
+        <text x="200" y="205" text-anchor="middle" font-size="10" fill="var(--text-muted,#9aa7b8)">query (gold) → its nearest neighbours are the “login” cluster</text>
+      </svg>
+      <div class="figure__cap">Similar meanings cluster. Search becomes “find the nearest points to the query’s embedding” — nearness = relevance.</div>
+    </div>
+
+    <div class="callout deeper">
+      <div class="callout__title">Choosing an embedding model</div>
+      Bigger isn’t always better. Pick by: <strong>domain fit</strong> (general vs code vs legal),
+      <strong>dimensionality</strong> (more dims = more storage &amp; slower search), <strong>context
+      length</strong> (how big a chunk it can embed), and <strong>cost</strong> (local vs API). Check the
+      MTEB leaderboard, but validate on <em>your</em> data — leaderboard rank rarely survives contact
+      with a real corpus. Critically: <strong>the same model must embed both documents and queries.</strong>
+    </div>
+
+    <!-- ===== Similarity ===== -->
+    <h2 id="similarity">Similarity metrics</h2>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>Metric</th><th>Measures</th><th>Use when</th></tr></thead>
+        <tbody>
+          <tr><td><strong>Cosine similarity</strong></td><td>Angle between vectors (ignores magnitude)</td><td>The default for text embeddings</td></tr>
+          <tr><td><strong>Dot product</strong></td><td>Angle <em>and</em> magnitude</td><td>When vectors aren’t normalized / magnitude matters</td></tr>
+          <tr><td><strong>Euclidean (L2)</strong></td><td>Straight-line distance</td><td>Some image/spatial embeddings</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="callout warn">
+      <div class="callout__title">The normalization shortcut</div>
+      If you <strong>L2-normalize</strong> vectors (unit length), cosine similarity and dot product give
+      the same ranking — and a dot product is cheaper. That’s why most pipelines normalize once at index
+      time and use dot product thereafter. Mixing a cosine model with an L2 index is a classic silent bug.
+    </div>
+
+    <!-- ===== ANN ===== -->
+    <h2 id="ann">Why ANN, not brute force</h2>
+    <p>
+      Comparing a query against every vector (<strong>exact</strong> / flat search) is
+      <code>O(n·d)</code> — fine for thousands of vectors, hopeless for millions per request.
+      <strong>Approximate Nearest Neighbor (ANN)</strong> indexes trade a tiny bit of recall for
+      orders-of-magnitude speed: they get the right neighbors ~95–99% of the time in sub-millisecond
+      time. That recall-vs-speed dial is the core tradeoff of every vector database.
+    </p>
+
+    <!-- ===== Indexes ===== -->
+    <h2 id="indexes">HNSW vs IVF — the two you must know</h2>
+    <div class="figure">
+      <svg viewBox="0 0 420 180" role="img" aria-label="HNSW: a layered navigable small-world graph traversed from a coarse top layer down to the base">
+        <text x="210" y="16" text-anchor="middle" font-size="11" fill="var(--text-muted,#9aa7b8)">HNSW: hop through a graph, coarse → fine</text>
+        <!-- top layer (sparse) -->
+        <g stroke="#7c8cff" stroke-width="1" fill="#7c8cff">
+          <line x1="60" y1="45" x2="200" y2="45"/><line x1="200" y1="45" x2="340" y2="45"/>
+          <circle cx="60" cy="45" r="5"/><circle cx="200" cy="45" r="5"/><circle cx="340" cy="45" r="5"/>
+        </g>
+        <text x="30" y="49" font-size="9" fill="var(--text-muted,#9aa7b8)">L2</text>
+        <!-- mid layer -->
+        <g stroke="#38bdf8" stroke-width="1" fill="#38bdf8" opacity="0.85">
+          <line x1="60" y1="95" x2="130" y2="95"/><line x1="130" y1="95" x2="200" y2="95"/><line x1="200" y1="95" x2="270" y2="95"/><line x1="270" y1="95" x2="340" y2="95"/>
+          <circle cx="60" cy="95" r="4"/><circle cx="130" cy="95" r="4"/><circle cx="200" cy="95" r="4"/><circle cx="270" cy="95" r="4"/><circle cx="340" cy="95" r="4"/>
+        </g>
+        <text x="30" y="99" font-size="9" fill="var(--text-muted,#9aa7b8)">L1</text>
+        <!-- base layer (dense) -->
+        <g stroke="var(--border-strong,#3a4457)" stroke-width="0.8" fill="var(--text-muted,#9aa7b8)">
+          <line x1="50" y1="150" x2="110" y2="150"/><line x1="110" y1="150" x2="170" y2="150"/><line x1="170" y1="150" x2="230" y2="150"/><line x1="230" y1="150" x2="290" y2="150"/><line x1="290" y1="150" x2="350" y2="150"/>
+          <circle cx="50" cy="150" r="3"/><circle cx="110" cy="150" r="3"/><circle cx="170" cy="150" r="3"/><circle cx="230" cy="150" r="3"/><circle cx="290" cy="150" r="3"/><circle cx="350" cy="150" r="3"/>
+        </g>
+        <text x="30" y="154" font-size="9" fill="var(--text-muted,#9aa7b8)">L0</text>
+        <!-- descent arrows -->
+        <g stroke="#f0b429" stroke-width="1.6" class="anim-flow" fill="none">
+          <line x1="200" y1="50" x2="200" y2="90"/><line x1="200" y1="100" x2="270" y2="146"/>
+        </g>
+      </svg>
+      <div class="figure__cap">HNSW greedily hops through a multi-layer “small-world” graph — a few big jumps up top, fine steps at the bottom — reaching the neighborhood in log-ish time.</div>
+    </div>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>Index</th><th>How</th><th>Strengths / tradeoffs</th></tr></thead>
+        <tbody>
+          <tr><td><strong>HNSW</strong></td><td>Layered navigable small-world graph</td><td>Excellent recall + speed; higher memory; the common default</td></tr>
+          <tr><td><strong>IVF</strong></td><td>Cluster vectors, search only the nearest clusters (probes)</td><td>Memory-efficient at huge scale; recall depends on #probes</td></tr>
+          <tr><td><strong>Flat</strong></td><td>Exact brute force</td><td>100% recall; only for small collections / ground truth</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- ===== Quantization ===== -->
+    <h2 id="quant">Quantization &amp; dimensionality</h2>
+    <p>
+      Millions of float32 vectors eat RAM fast (1M × 768 dims × 4 bytes ≈ 3 GB). Two levers shrink it:
+    </p>
+    <ul>
+      <li><strong>Quantization</strong> — store vectors in lower precision. <strong>Scalar</strong>
+        (float32→int8) ≈ 4× smaller with minor recall loss; <strong>Product Quantization (PQ)</strong>
+        compresses far more for billion-scale, with a bigger recall hit.</li>
+      <li><strong>Dimensionality</strong> — fewer dims = less storage and faster search. Some models
+        (Matryoshka embeddings) let you <em>truncate</em> dimensions with graceful quality loss.</li>
+    </ul>
+
+    <!-- ===== Metadata ===== -->
+    <h2 id="metadata">Metadata filtering &amp; hybrid</h2>
+    <p>
+      Real retrieval is rarely “pure similarity.” You attach <strong>metadata</strong> to each vector
+      (tenant, date, doc type, permissions) and filter on it — “nearest chunks <em>from this customer,
+      newer than Jan, that this user may read.</em>” This is also how you enforce
+      <strong>multi-tenancy and access control</strong> in a shared index — miss it and you leak one
+      customer’s data into another’s results. Combine with keyword (sparse) scoring for
+      <strong>hybrid search</strong> (see <a href="p2-rag.html">RAG</a>).
+    </p>
+    <div class="callout warn">
+      <div class="callout__title">FDE gotcha: filtered ANN is subtle</div>
+      Applying a hard metadata filter to an approximate graph can wreck recall (the reachable neighbors
+      get filtered out). Good vector DBs handle pre- vs post-filtering carefully — know that filtering
+      and ANN interact, and test recall <em>with</em> your filters, not just without them.
+    </div>
+
+    <!-- ===== Q&A ===== -->
+    <h2 id="qa">Interview Q&amp;A</h2>
+
+    <details class="qa">
+      <summary class="qa__q"><span class="badge core">core</span>What is a vector database and why not just use Postgres?</summary>
+      <div class="qa__a">
+        <p>
+          A vector database stores embeddings and answers <em>nearest-neighbor</em> queries efficiently
+          via ANN indexes (HNSW/IVF). A regular DB is built for exact matches and range queries; scanning
+          millions of vectors for similarity per request is too slow. That said, extensions like
+          <code>pgvector</code> add ANN to Postgres and are perfect up to moderate scale — so “just use
+          Postgres+pgvector” is often the right, cheaper answer before reaching for a dedicated system.
+        </p>
+      </div>
+    </details>
+
+    <details class="qa">
+      <summary class="qa__q"><span class="badge trap">trap</span>Cosine vs dot product — does it matter?</summary>
+      <div class="qa__a">
+        <p>
+          Cosine measures angle only; dot product includes magnitude. If your vectors are L2-normalized,
+          the two produce identical rankings, and dot product is cheaper — which is why pipelines normalize
+          once and use dot product. The bug to avoid: using a metric that doesn’t match how the embedding
+          model was trained (e.g. an L2 index with a cosine-trained model), which silently degrades recall.
+        </p>
+      </div>
+    </details>
+
+    <details class="qa">
+      <summary class="qa__q"><span class="badge senior">senior</span>Explain the recall-vs-latency tradeoff in ANN indexes.</summary>
+      <div class="qa__a">
+        <p>
+          ANN is approximate on purpose: it skips most of the space to be fast, occasionally missing a
+          true nearest neighbor. Index parameters control the dial — for HNSW, higher <code>ef_search</code>
+          / <code>M</code> explore more of the graph for better recall at higher latency/memory; for IVF,
+          more <code>nprobe</code> clusters means better recall but slower search. You tune these to hit a
+          target recall (say 98%) within your latency SLA — there’s no free lunch, only the operating point
+          you choose.
+        </p>
+      </div>
+    </details>
+
+    <details class="qa">
+      <summary class="qa__q"><span class="badge senior">senior</span>How do you do access control in a shared vector index?</summary>
+      <div class="qa__a">
+        <p>
+          Store authorization metadata (tenant id, allowed roles, document ACLs) alongside each vector and
+          apply it as a filter at query time, so a user only ever retrieves chunks they’re permitted to see.
+          For strict isolation you can also partition by namespace/collection per tenant. The risk to call
+          out: naive filtering on an approximate index can hurt recall, so you must verify recall with the
+          filters applied — and never rely on the LLM prompt to enforce permissions.
+        </p>
+      </div>
+    </details>
+
+    <details class="qa">
+      <summary class="qa__q"><span class="badge core">core</span>When would you quantize your vectors?</summary>
+      <div class="qa__a">
+        <p>
+          When memory/cost is the bottleneck. Scalar quantization (int8) cuts storage ~4× with small recall
+          loss — a good default at scale. Product quantization compresses much further for billion-scale
+          collections at a larger recall cost. Below a few million vectors it’s usually unnecessary — full
+          precision is fine and simpler. Measure recall before and after; don’t quantize blindly.
+        </p>
+      </div>
+    </details>
+
+    <!-- ===== Code ===== -->
+    <h2 id="code">Code: build &amp; query a vector index</h2>
+    <p>
+      A real ANN index with FAISS — embed, add, search — plus the normalization detail that makes inner
+      product behave as cosine. This is the engine you’d put behind the RAG retrieve step.
+    </p>
+
+    <div class="codewrap">
+      <div class="codewrap__bar"><span class="codewrap__lang">python</span><span>build an HNSW index and query it (FAISS)</span><button class="copybtn" type="button">Copy</button></div>
+<pre><code class="language-python"># A production-shaped vector index with FAISS.
+# pip install faiss-cpu sentence-transformers numpy
+import faiss
+import numpy as np
+from sentence_transformers import SentenceTransformer
+
+docs = [
+    "How do I reset my password?",
+    "Our refund policy lasts 30 days.",
+    "Login fails with a 403 error.",
+    "The Pro plan includes 10 seats.",
+]
+
+model = SentenceTransformer("all-MiniLM-L6-v2")
+# normalize_embeddings=True -> unit vectors, so INNER PRODUCT == cosine similarity.
+vecs = model.encode(docs, normalize_embeddings=True).astype("float32")
+dim = vecs.shape[1]                       # 384 for this model
+
+# --- Build an HNSW index (great recall/speed default) -----------------------
+# 32 = graph connectivity M; higher = better recall, more memory.
+index = faiss.IndexHNSWFlat(dim, 32, faiss.METRIC_INNER_PRODUCT)
+index.hnsw.efConstruction = 200           # build-time thoroughness
+index.hnsw.efSearch = 64                  # query-time recall/latency dial
+index.add(vecs)                           # index now holds all document vectors
+
+# --- Query ------------------------------------------------------------------
+def search(query: str, k: int = 2):
+    q = model.encode([query], normalize_embeddings=True).astype("float32")  # SAME model!
+    scores, ids = index.search(q, k)      # returns (similarities, indices)
+    return [(docs[i], float(s)) for i, s in zip(ids[0], scores[0])]
+
+for doc, score in search("I can't log in"):
+    print(f"{score:.3f}  {doc}")
+# Top hit is the 403/login doc — matched by MEANING, not shared keywords.
+
+# In production you'd add metadata + filtering, persist the index, and (at scale)
+# quantize the vectors — but the retrieve primitive is exactly this.
+</code></pre>
+    </div>
+
+    <div class="callout">
+      <div class="callout__title">Connect it to what you know</div>
+      Think of the vector index as a specialized read replica: an offline job (Spark/Databricks) computes
+      embeddings and bulk-loads them; the serving path issues low-latency similarity queries. Same
+      build-vs-serve split you already run — the only new idea is “nearest” replacing “equals.”
+    </div>
+
+    <nav class="pagenav" id="pageNav" aria-label="Page navigation"></nav>
+    <div class="sitefoot">cb-ml · Part 2 · Building with LLMs</div>
+  </main>
+</body>
+</html>

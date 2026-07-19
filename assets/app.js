@@ -33,7 +33,7 @@ window.CBML_NAV = [
       { href: "p2-rag.html", title: "RAG",
         desc: "Chunking, hybrid search, re-ranking, evaluation, and the real failure modes." },
       { href: "p2-vector-db-embeddings.html", title: "Vector DBs & Embeddings",
-        desc: "Similarity metrics, ANN indexes (HNSW/IVF), hybrid + metadata filtering.", soon: true },
+        desc: "Similarity metrics, ANN indexes (HNSW/IVF), hybrid + metadata filtering." },
       { href: "p2-agents.html", title: "Agents & Tool Use",
         desc: "ReAct loops, function calling, memory, MCP, and agent evaluation.", soon: true },
     ],
