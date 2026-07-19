@@ -20,7 +20,7 @@ Legend: `[ ]` todo · `[~]` in progress · `[x]` done
 - [x] `p1-transformers-nlp.html` — **reference page** (locks the template)
 - [x] `.nojekyll`, `PROGRESS.md`, `README.md` (branch-based Pages — no Actions workflow)
 - [x] Commit + push to `main`; verified locally at 390px viewport
-- [ ] **User action (one-time):** enable Pages → Settings → Pages → Deploy from a branch → `main` / root
+- [x] **Pages enabled** (Deploy from a branch → `main` / root); "pages build and deployment" succeeded → site live at https://chandanbharadwaj.github.io/cb-ml/
 
 ## Part 1 · Foundations & Concepts
 - [x] `p1-ml-deep-learning.html` — classical baselines (GBM on tabular) → neurons, backprop, optimizers; GBM-vs-MLP side by side
