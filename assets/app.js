@@ -29,7 +29,7 @@ window.CBML_NAV = [
     label: "Building with LLMs",
     items: [
       { href: "p2-prompt-engineering.html", title: "Prompt Engineering",
-        desc: "Few-shot, CoT/ReAct, structured output, and prompt-injection defence.", soon: true },
+        desc: "Few-shot, CoT/ReAct, structured output, and prompt-injection defence." },
       { href: "p2-rag.html", title: "RAG",
         desc: "Chunking, hybrid search, re-ranking, evaluation, and the real failure modes.", soon: true },
       { href: "p2-vector-db-embeddings.html", title: "Vector DBs & Embeddings",

@@ -28,7 +28,7 @@ Legend: `[ ]` todo · `[~]` in progress · `[x]` done
 - [x] `p1-genai-llm-slm.html` — autoregressive generation, decoding params, LLM vs SLM tradeoffs
 
 ## Part 2 · Building with LLMs (FDE core)
-- [ ] `p2-prompt-engineering.html` — few-shot, CoT/ReAct, structured output, injection defense
+- [x] `p2-prompt-engineering.html` — few-shot, CoT/ReAct, structured output, injection defense
 - [ ] `p2-rag.html` — chunking, hybrid search, re-ranking, eval, failure modes
 - [ ] `p2-vector-db-embeddings.html` — similarity metrics, ANN (HNSW/IVF), hybrid + metadata
 - [ ] `p2-agents.html` — ReAct loop, function calling, memory, MCP, agent eval
