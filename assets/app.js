@@ -57,7 +57,7 @@ window.CBML_NAV = [
     label: "Production & Problem-Solving",
     items: [
       { href: "p4-mlops-production.html", title: "MLOps & Production",
-        desc: "Drift/monitoring, canary/shadow deploys, guardrails, PII, responsible AI.", soon: true },
+        desc: "Drift/monitoring, canary/shadow deploys, guardrails, PII, responsible AI." },
       { href: "p4-when-to-use-ml.html", title: "When to Use ML (the Ladder)",
         desc: "The escalation ladder: algorithm → classical ML → DL → LLM, with CPU/GPU & cost.", soon: true },
       { href: "p4-problem-solving.html", title: "Problem → Solution",

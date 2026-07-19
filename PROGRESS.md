@@ -40,7 +40,7 @@ Legend: `[ ]` todo · `[~]` in progress · `[x]` done
 - [x] `p3-metrics-evaluation.html` — precision/recall/threshold/calibration + LLM eval, LLM-as-judge (incl. live threshold slider)
 
 ## Part 4 · Production & Problem-Solving (FDE core)
-- [ ] `p4-mlops-production.html` — drift/monitoring, canary/shadow, guardrails, PII
+- [x] `p4-mlops-production.html` — drift/monitoring, canary/shadow, guardrails, PII
 - [ ] `p4-when-to-use-ml.html` — **the escalation ladder** (centerpiece), CPU/GPU & cost at each rung
 - [ ] `p4-problem-solving.html` — problem→approach case studies, ML/GenAI system design
 - [ ] `p4-multimodal.html` — VLMs/CLIP, diffusion, VQA, multimodal RAG (overview)

@@ -1,0 +1,337 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MLOps &amp; Production · cb-ml</title>
+  <meta name="description" content="Shipping and operating models: data & concept drift, monitoring, canary/shadow deploys, A/B testing, versioning & rollback, guardrails and PII — the part senior interviews probe hardest.">
+  <script>(function(){try{var t=localStorage.getItem('cbml-theme');if(t)document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+  <link rel="stylesheet" href="assets/styles.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+  <script defer src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+  <script defer src="assets/app.js"></script>
+</head>
+<body>
+  <a class="skip" href="#main">Skip to content</a>
+
+  <header class="topbar">
+    <button id="menuBtn" class="iconbtn" aria-label="Open navigation" aria-expanded="false">☰</button>
+    <a class="topbar__brand" href="index.html"><span class="logo">ml</span> cb-ml</a>
+    <span class="topbar__spacer"></span>
+    <button id="themeBtn" class="iconbtn" aria-label="Toggle theme">☾</button>
+  </header>
+
+  <aside id="drawer" class="drawer" aria-label="Site navigation">
+    <div class="drawer__head">
+      <span class="logo">ml</span>
+      <div><div class="drawer__title">cb-ml</div><div class="drawer__sub">AI/ML · GenAI interview prep</div></div>
+    </div>
+    <nav id="drawerNav"></nav>
+  </aside>
+  <div id="scrim" class="scrim"></div>
+
+  <main id="main">
+    <span class="eyebrow">Part 4 · Production &amp; Problem-Solving</span>
+    <h1>MLOps &amp; Production</h1>
+    <p class="lede">
+      A model isn’t done when it trains — it’s done when it runs reliably for months and you notice the
+      day it quietly breaks. Monitoring is consistently the <strong>biggest gap in senior candidates</strong>,
+      and it’s home turf for you: this is the deployment, observability, and reliability engineering you
+      already do — with model-specific twists.
+    </p>
+
+    <div class="callout ladder">
+      <div class="callout__title">Where this sits on the ladder</div>
+      <strong>The layer that keeps <em>any</em> rung alive in production.</strong> A model degrades over
+      time as the world shifts under it — and the cheaper rungs are cheaper to operate, too. Whether you
+      shipped a GBM or an LLM agent, the same lifecycle applies: deploy safely, watch it, and be able to
+      roll back in seconds.
+      <div class="chips">
+        <span class="chip">deploy · monitor · roll back</span>
+        <span class="chip cost">the world drifts</span>
+        <span class="chip">your home turf</span>
+      </div>
+    </div>
+
+    <nav class="toc" aria-label="On this page">
+      <div class="toc__title">On this page</div>
+      <ol>
+        <li><a href="#drift">Drift: the model didn’t change, the world did</a></li>
+        <li><a href="#monitor">What to monitor</a></li>
+        <li><a href="#deploy">Safe deployment: shadow, canary, A/B</a></li>
+        <li><a href="#versioning">Versioning &amp; rollback</a></li>
+        <li><a href="#guardrails">Guardrails, PII &amp; responsible AI</a></li>
+        <li><a href="#llmops">LLM-specific ops</a></li>
+        <li><a href="#qa">Interview Q&amp;A</a></li>
+        <li><a href="#code">Code: drift check &amp; PII filter</a></li>
+      </ol>
+    </nav>
+
+    <!-- ===== Drift ===== -->
+    <h2 id="drift">Drift: the model didn’t change, the world did</h2>
+    <p>
+      Your model is frozen at training time; reality keeps moving. That mismatch is <strong>drift</strong>,
+      and it silently erodes performance:
+    </p>
+    <ul>
+      <li><strong>Data drift</strong> (covariate shift) — the input distribution changes. New user
+        segment, a rebranded product name, a sensor recalibrated. Inputs look different than training.</li>
+      <li><strong>Concept drift</strong> — the relationship between inputs and the target changes.
+        “Normal” spending patterns shift after a holiday; what counted as fraud last year doesn’t now.</li>
+      <li><strong>Label lag</strong> — you often can’t measure accuracy live because ground-truth labels
+        arrive late (did this “churn” prediction come true? ask in 90 days). So you monitor
+        <em>proxies</em> — input distributions and prediction distributions — not just accuracy.</li>
+    </ul>
+
+    <div class="figure">
+      <svg viewBox="0 0 420 170" role="img" aria-label="Model accuracy slowly declining over time as drift accumulates, crossing an alert threshold">
+        <line x1="40" y1="20" x2="40" y2="140" stroke="var(--border,#2a3140)"/>
+        <line x1="40" y1="140" x2="400" y2="140" stroke="var(--border,#2a3140)"/>
+        <text x="20" y="80" font-size="10" fill="var(--text-muted,#9aa7b8)" transform="rotate(-90 20 80)" text-anchor="middle">accuracy</text>
+        <text x="220" y="162" font-size="10" fill="var(--text-muted,#9aa7b8)" text-anchor="middle">time in production →</text>
+        <!-- alert threshold -->
+        <line x1="40" y1="105" x2="400" y2="105" stroke="#f85149" stroke-width="1" stroke-dasharray="5 4"/>
+        <text x="395" y="100" font-size="9" fill="#f85149" text-anchor="end">alert threshold</text>
+        <!-- declining accuracy curve -->
+        <path d="M45,40 C120,42 180,55 240,78 C300,100 340,120 395,128" fill="none" stroke="#38bdf8" stroke-width="2.5" class="anim-flow"/>
+        <!-- point where it crosses -->
+        <circle cx="300" cy="105" r="5" fill="#f0b429"/>
+        <text x="300" y="96" font-size="9" fill="#f0b429" text-anchor="middle">retrain!</text>
+      </svg>
+      <div class="figure__cap">Nobody touched the model, yet accuracy decays as the world drifts. Monitoring catches the crossing; a retraining trigger (or alert) fires before users feel it.</div>
+    </div>
+
+    <!-- ===== Monitor ===== -->
+    <h2 id="monitor">What to monitor</h2>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>Layer</th><th>Watch</th></tr></thead>
+        <tbody>
+          <tr><td><strong>Operational</strong></td><td>Latency (p95/p99), error rate, throughput, cost/$ — the same SRE metrics as any service</td></tr>
+          <tr><td><strong>Data</strong></td><td>Input feature distributions vs a training baseline (drift tests: PSI, KL, KS)</td></tr>
+          <tr><td><strong>Prediction</strong></td><td>Output distribution, score histograms, % of a class, confidence — shifts here flag trouble before labels arrive</td></tr>
+          <tr><td><strong>Model quality</strong></td><td>Accuracy/precision/recall once labels land; business KPIs (conversion, complaints)</td></tr>
+          <tr><td><strong>LLM-specific</strong></td><td>Hallucination/refusal rates, guardrail hits, token cost, user feedback (thumbs), eval-set scores</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="callout deeper">
+      <div class="callout__title">Connect it to what you know</div>
+      This is dashboards and alerting — your Databricks/PowerBI/cloud-monitoring world. The new idea is
+      monitoring <em>distributions</em>, not just uptime: a drift test on an input feature is a
+      statistical alarm on a data stream, exactly the kind of job you’d run on Spark.
+    </div>
+
+    <!-- ===== Deploy ===== -->
+    <h2 id="deploy">Safe deployment: shadow, canary, A/B</h2>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>Strategy</th><th>What</th><th>Answers</th></tr></thead>
+        <tbody>
+          <tr><td><strong>Shadow</strong></td><td>New model runs alongside prod on real traffic, but its outputs aren’t served</td><td>“Does it behave sanely on live data?” — zero user risk</td></tr>
+          <tr><td><strong>Canary</strong></td><td>Route a small % of traffic to the new model, watch, then ramp</td><td>“Is it safe to widen?” — limits blast radius</td></tr>
+          <tr><td><strong>A/B test</strong></td><td>Split traffic and compare business KPIs statistically</td><td>“Is it actually better?” — measures impact, not just health</td></tr>
+          <tr><td><strong>Blue-green</strong></td><td>Two full environments; flip traffic, instant rollback</td><td>“Can I revert in seconds?” — safe cutover</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="callout deeper">
+      <div class="callout__title">The distinction interviewers want</div>
+      Shadow/canary answer “is it <em>safe</em>?” (health, errors). A/B answers “is it <em>better</em>?”
+      (a metric moved, with statistical significance). Offline accuracy going up doesn’t prove the
+      business metric will — that’s what the A/B test is for.
+    </div>
+
+    <!-- ===== Versioning ===== -->
+    <h2 id="versioning">Versioning &amp; rollback</h2>
+    <p>
+      Reproducibility in ML means versioning more than code: <strong>data</strong>, <strong>features</strong>,
+      <strong>model artifacts</strong>, <strong>hyperparameters</strong>, and — for GenAI — <strong>prompts</strong>
+      too. A model registry (MLflow, etc.) tracks versions and lineage so you can answer “which data +
+      code produced the model serving request X?” and <strong>roll back instantly</strong> when a new
+      version misbehaves. Treat a prompt change like a code deploy: version it, test it against your eval
+      set, and be able to revert.
+    </p>
+
+    <!-- ===== Guardrails ===== -->
+    <h2 id="guardrails">Guardrails, PII &amp; responsible AI</h2>
+    <p>
+      The safety layer around a model — especially an LLM that touches customer data:
+    </p>
+    <ul>
+      <li><strong>Input/output guardrails</strong> — filter prompt injection, block disallowed topics,
+        validate output format/values, catch toxic or unsafe content before it reaches a user.</li>
+      <li><strong>PII handling</strong> — detect and redact personal data before it hits a model or a log;
+        respect data-residency (keep it in the customer’s region/VPC) — a real constraint an FDE meets
+        constantly.</li>
+      <li><strong>Bias &amp; fairness</strong> — check outcomes across groups; a model can be accurate
+        overall and unfair to a subgroup.</li>
+      <li><strong>Auditability</strong> — log inputs, outputs, versions, and decisions so you can explain
+        and defend what the system did (and meet GDPR/EU AI Act obligations).</li>
+    </ul>
+
+    <!-- ===== LLMOps ===== -->
+    <h2 id="llmops">LLM-specific ops</h2>
+    <p>
+      LLMs add operational concerns beyond classic MLOps: <strong>cost &amp; rate limiting</strong>
+      (token spend can explode; cap it per user/tenant), <strong>prompt/response logging</strong> for
+      debugging and eval, <strong>continuous evaluation</strong> (run your eval set on every prompt/model
+      change), <strong>fallbacks</strong> (a cheaper model or cached answer when the primary is down or
+      slow), and <strong>tracing</strong> agent trajectories. Non-determinism makes all of this harder —
+      pin temperature and snapshot model versions where you can.
+    </p>
+
+    <!-- ===== Q&A ===== -->
+    <h2 id="qa">Interview Q&amp;A</h2>
+
+    <details class="qa">
+      <summary class="qa__q"><span class="badge core">core</span>Data drift vs concept drift — what’s the difference and how do you detect them?</summary>
+      <div class="qa__a">
+        <p>
+          Data drift is a change in the input distribution P(X) — the features look different than at
+          training. Concept drift is a change in the relationship P(y|X) — the same inputs now map to
+          different outcomes. You detect data drift with statistical tests comparing live features to a
+          training baseline (PSI, KL divergence, KS test) and monitoring prediction distributions; concept
+          drift shows up as accuracy decay once labels arrive, or as rising error on a labeled sample. The
+          usual response is an alert and a retraining trigger.
+        </p>
+      </div>
+    </details>
+
+    <details class="qa">
+      <summary class="qa__q"><span class="badge trap">trap</span>How do you monitor a model when ground-truth labels take 90 days to arrive?</summary>
+      <div class="qa__a">
+        <p>
+          You can’t wait 90 days to notice a problem, so you monitor leading indicators: input feature
+          distributions (data-drift tests) and the model’s output/score distribution, which shift long
+          before delayed labels confirm degradation. You also track business proxies and collect any fast
+          feedback signals. When labels do land, you compute true accuracy on that cohort to confirm.
+          Proxy monitoring now, ground-truth validation later.
+        </p>
+      </div>
+    </details>
+
+    <details class="qa">
+      <summary class="qa__q"><span class="badge core">core</span>Shadow vs canary vs A/B — when do you use each?</summary>
+      <div class="qa__a">
+        <p>
+          Shadow deployment runs the new model on real traffic without serving its outputs — use it to
+          confirm it behaves and performs sanely with zero user risk. Canary routes a small slice of live
+          traffic to it and ramps up while you watch errors/latency — use it to limit blast radius during
+          rollout. A/B testing splits traffic and compares business KPIs with statistical significance —
+          use it to prove the new model is actually <em>better</em>, not just healthy. They’re
+          complementary stages, not alternatives.
+        </p>
+      </div>
+    </details>
+
+    <details class="qa">
+      <summary class="qa__q"><span class="badge senior">senior</span>What do you version to make an ML system reproducible?</summary>
+      <div class="qa__a">
+        <p>
+          Everything that determines the artifact: code, the training <em>data</em> (or a snapshot/hash),
+          feature definitions, hyperparameters, environment, the model binary, and — for GenAI — prompts
+          and the exact model version/endpoint. A model registry ties these together with lineage so you
+          can reproduce and, critically, roll back a bad release in seconds. Treating prompts as
+          unversioned config is a common and painful mistake.
+        </p>
+      </div>
+    </details>
+
+    <details class="qa">
+      <summary class="qa__q"><span class="badge senior">senior</span>How do you keep an LLM system’s cost and safety under control in production?</summary>
+      <div class="qa__a">
+        <p>
+          Cost: cap tokens per request, rate-limit per user/tenant, cache repeated prompts and semantically
+          similar queries, and route easy requests to a cheaper/smaller model. Safety: input and output
+          guardrails (injection filters, allow-lists, toxicity/PII detection and redaction), least-privilege
+          on any tools, human approval for risky actions, and full logging for audit. Plus continuous
+          evaluation on a task-specific set so a prompt or model change can’t silently regress quality.
+        </p>
+      </div>
+    </details>
+
+    <details class="qa">
+      <summary class="qa__q"><span class="badge trap">trap</span>A customer requires that their data never leave their region. How does that shape your design?</summary>
+      <div class="qa__a">
+        <p>
+          Data residency becomes an architectural constraint. I’d favor self-hosted or in-region models
+          (an SLM in their VPC, or a regional endpoint of a provider that contractually keeps data in
+          region), keep embeddings/vector stores and logs in-region, redact PII before anything leaves a
+          trust boundary, and document the data flow for audit. It’s a strong reason to prefer a smaller
+          on-prem model over a public API — exactly the kind of tradeoff an FDE makes at a customer site.
+        </p>
+      </div>
+    </details>
+
+    <!-- ===== Code ===== -->
+    <h2 id="code">Code: a drift check &amp; a PII guardrail</h2>
+    <p>
+      Two things you’ll actually wire up: a population-stability drift test on a feature, and a PII
+      redactor to run before text hits a model or a log.
+    </p>
+
+    <div class="codewrap">
+      <div class="codewrap__bar"><span class="codewrap__lang">python</span><span>data-drift check with Population Stability Index (PSI)</span><button class="copybtn" type="button">Copy</button></div>
+<pre><code class="language-python"># PSI compares a live feature's distribution to the training baseline.
+# Rule of thumb: <0.1 stable, 0.1-0.25 moderate drift, >0.25 significant drift.
+import numpy as np
+
+def psi(baseline: np.ndarray, live: np.ndarray, bins: int = 10) -> float:
+    # Build bin edges from the TRAINING baseline (quantiles), then reuse them live.
+    edges = np.quantile(baseline, np.linspace(0, 1, bins + 1))
+    edges[0], edges[-1] = -np.inf, np.inf            # catch out-of-range live values
+    base_pct = np.histogram(baseline, edges)[0] / len(baseline)
+    live_pct = np.histogram(live,     edges)[0] / len(live)
+    eps = 1e-6                                        # avoid log(0) / divide-by-zero
+    base_pct, live_pct = base_pct + eps, live_pct + eps
+    return float(np.sum((live_pct - base_pct) * np.log(live_pct / base_pct)))
+
+# Baseline captured at training time; 'today' pulled from the live feature store.
+baseline = np.random.normal(50, 10, 10_000)          # e.g. avg transaction amount
+today    = np.random.normal(58, 12, 2_000)           # distribution has shifted up
+score = psi(baseline, today)
+print(f"PSI = {score:.3f}", "-> RETRAIN/ALERT" if score > 0.25 else "-> ok")
+# Run this per feature on a schedule (a Spark/Databricks job) and alert on breaches.
+</code></pre>
+    </div>
+
+    <div class="codewrap">
+      <div class="codewrap__bar"><span class="codewrap__lang">python</span><span>a simple PII redaction guardrail</span><button class="copybtn" type="button">Copy</button></div>
+<pre><code class="language-python"># Redact obvious PII BEFORE text reaches an LLM, a log, or leaves the trust boundary.
+# For production use a real PII detector (e.g. Presidio); regex is the illustrative floor.
+import re
+
+PATTERNS = {
+    "EMAIL":  r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}",
+    "PHONE":  r"\b(?:\+?\d[\s-]?){10,}\b",
+    "SSN":    r"\b\d{3}-\d{2}-\d{4}\b",
+    "CARD":   r"\b(?:\d[ -]*?){13,16}\b",
+}
+
+def redact(text: str) -> str:
+    """Replace detected PII with typed placeholders, e.g. [EMAIL]."""
+    for label, pattern in PATTERNS.items():
+        text = re.sub(pattern, f"[{label}]", text)
+    return text
+
+msg = "Email me at jane.doe@acme.com or call 555-123-4567 about invoice 9921."
+print(redact(msg))
+# -> "Email me at [EMAIL] or call [PHONE] about invoice 9921."
+# Wire this as an input guardrail; log only the redacted text. Do the same on OUTPUTS
+# so the model can't echo PII back, and keep everything in the customer's region.
+</code></pre>
+    </div>
+
+    <div class="callout">
+      <div class="callout__title">The mindset to carry</div>
+      In production, “accuracy” is table stakes. What earns trust is <strong>observability + safe rollout +
+      instant rollback + guardrails</strong> — the reliability engineering you already do, applied to a
+      component that also drifts and occasionally makes things up.
+    </div>
+
+    <nav class="pagenav" id="pageNav" aria-label="Page navigation"></nav>
+    <div class="sitefoot">cb-ml · Part 4 · Production &amp; Problem-Solving</div>
+  </main>
+</body>
+</html>
