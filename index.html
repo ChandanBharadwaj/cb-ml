@@ -115,7 +115,37 @@
 
     <!-- ===== Part overviews (cards auto-built by app.js from CBML_NAV) ===== -->
     <h2 id="p1">Part 1 · Foundations &amp; Concepts</h2>
-    <p>The bedrock — including the classical-ML rungs you must be able to defend, then deep learning and transformers.</p>
+    <p>
+      The bedrock, taught end to end — each topic starts with a plain <em>“what it is,”</em> spells out
+      every abbreviation, and stands on its own. The six pages build in order: from what machine learning
+      is, up the ladder through classical models and deep learning, into the transformer, and on to
+      generative language models.
+    </p>
+
+    <div class="figure">
+      <svg viewBox="0 0 460 180" role="img" aria-label="Map of Part 1: six topics building on each other from What is ML to GenAI">
+        <defs><marker id="p1map" markerWidth="9" markerHeight="9" refX="5" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#7c8cff"/></marker></defs>
+        <g font-family="var(--font-mono)" font-size="10.5" text-anchor="middle">
+          <!-- top row, left to right -->
+          <g style="animation:fadeSlide .5s ease both"><rect x="16"  y="28" width="130" height="36" rx="9" fill="var(--surface-2,#1c2333)" stroke="#38bdf8"/><text x="81"  y="50" fill="#38bdf8">1 · What is ML</text></g>
+          <g style="animation:fadeSlide .5s ease .1s both"><rect x="165" y="28" width="130" height="36" rx="9" fill="var(--surface-2,#1c2333)" stroke="#38bdf8"/><text x="230" y="50" fill="#38bdf8">2 · Classical ML</text></g>
+          <g style="animation:fadeSlide .5s ease .2s both"><rect x="314" y="28" width="130" height="36" rx="9" fill="var(--surface-2,#1c2333)" stroke="#38bdf8"/><text x="379" y="50" fill="#38bdf8">3 · Neural Nets</text></g>
+          <!-- bottom row, right to left -->
+          <g style="animation:fadeSlide .5s ease .3s both"><rect x="314" y="116" width="130" height="36" rx="9" fill="var(--accent-soft,#2b2f55)" stroke="#7c8cff"/><text x="379" y="138" fill="#7c8cff">4 · Tokens + Embeds</text></g>
+          <g style="animation:fadeSlide .5s ease .4s both"><rect x="165" y="116" width="130" height="36" rx="9" fill="var(--accent-soft,#2b2f55)" stroke="#7c8cff"/><text x="230" y="138" fill="#7c8cff">5 · Transformers</text></g>
+          <g style="animation:fadeSlide .5s ease .5s both"><rect x="16"  y="116" width="130" height="36" rx="9" fill="var(--accent-soft,#2b2f55)" stroke="#7c8cff"/><text x="81"  y="138" fill="#7c8cff">6 · GenAI/LLM/SLM</text></g>
+        </g>
+        <g stroke="#7c8cff" fill="none" class="anim-flow">
+          <path d="M146,46 L165,46" marker-end="url(#p1map)"/>
+          <path d="M295,46 L314,46" marker-end="url(#p1map)"/>
+          <path d="M379,64 L379,116" marker-end="url(#p1map)"/>
+          <path d="M314,134 L295,134" marker-end="url(#p1map)"/>
+          <path d="M165,134 L146,134" marker-end="url(#p1map)"/>
+        </g>
+      </svg>
+      <div class="figure__cap">Part 1 in one picture: six self-contained pages, each building on the last — climb them in order or jump to any one.</div>
+    </div>
+
     <div class="cardgrid" data-part="Part 1"></div>
 
     <h2 id="p2">Part 2 · Building with LLMs</h2>

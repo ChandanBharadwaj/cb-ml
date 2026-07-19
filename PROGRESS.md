@@ -20,15 +20,22 @@ Legend: `[ ]` todo · `[~]` in progress · `[x]` done
 - [x] `assets/styles.css` — mobile-first, dark default + light toggle, all components
 - [x] `assets/app.js` — nav drawer, cards, theme, copy-code, scroll-spy (single SITE-map source)
 - [x] `index.html` — landing + **interactive escalation-ladder hero SVG**
-- [x] `p1-transformers-nlp.html` — **reference page** (locks the template)
+- [x] Topic-page template established in Phase 0 (locks head + topbar + drawer + TOC + Q&A + code + prev/next)
 - [x] `.nojekyll`, `PROGRESS.md`, `README.md` (branch-based Pages — no Actions workflow)
 - [x] Commit + push to `main`; verified locally at 390px viewport
 - [x] **Pages enabled** (Deploy from a branch → `main` / root); "pages build and deployment" succeeded → site live at https://chandanbharadwaj.github.io/cb-ml/
 
 ## Part 1 · Foundations & Concepts
-- [x] `p1-ml-deep-learning.html` — classical baselines (GBM on tabular) → neurons, backprop, optimizers; GBM-vs-MLP side by side
-- [x] `p1-transformers-nlp.html` — tokenization, embeddings, RoPE, self-attention, multi-head, blocks *(done in Phase 0)*
-- [x] `p1-genai-llm-slm.html` — autoregressive generation, decoding params, LLM vs SLM tradeoffs
+> Restructured from 3 pages → **6 focused, end-to-end pages**. Each subtopic opens with a plain
+> "What it is" definition, spells out every abbreviation, carries a per-page **Key terms** box and a
+> "Builds on · Next" strip, and ends with a takeaway. Retired: `p1-ml-deep-learning.html`,
+> `p1-transformers-nlp.html`.
+- [x] `p1-what-is-ml.html` — what ML is, learning paradigms, features/labels, train vs infer, params vs hyperparams, the ML lifecycle
+- [x] `p1-classical-ml.html` — regression, decision trees, random forests, gradient-boosted trees, k-NN & k-means; why GBM rules tabular
+- [x] `p1-neural-networks.html` — neuron → network, forward pass, backprop & gradient descent, activations/losses/optimizers, DL vs classical
+- [x] `p1-tokenization-embeddings.html` — what NLP is, subword tokenization (BPE), embeddings, positional encoding (sinusoidal & RoPE)
+- [x] `p1-transformers.html` — what a transformer is, why it replaced RNNs, self-attention, multi-head, the block, encoder/decoder
+- [x] `p1-genai-llm-slm.html` — generative vs discriminative, autoregressive generation, decoding, context/KV cache, scaling laws & model size, LLM vs SLM, hallucination
 
 ## Part 2 · Building with LLMs (FDE core)
 - [x] `p2-prompt-engineering.html` — few-shot, CoT/ReAct, structured output, injection defense
