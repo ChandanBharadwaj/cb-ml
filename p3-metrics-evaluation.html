@@ -1,0 +1,437 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Metrics &amp; Evaluation · cb-ml</title>
+  <meta name="description" content="Precision, recall, F1, ROC/AUC and the decision threshold (with a live slider), calibration, class imbalance — plus modern LLM evaluation: perplexity, BLEU/ROUGE, LLM-as-judge, and benchmarks.">
+  <script>(function(){try{var t=localStorage.getItem('cbml-theme');if(t)document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+  <link rel="stylesheet" href="assets/styles.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+  <script defer src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+  <script defer src="assets/app.js"></script>
+</head>
+<body>
+  <a class="skip" href="#main">Skip to content</a>
+
+  <header class="topbar">
+    <button id="menuBtn" class="iconbtn" aria-label="Open navigation" aria-expanded="false">☰</button>
+    <a class="topbar__brand" href="index.html"><span class="logo">ml</span> cb-ml</a>
+    <span class="topbar__spacer"></span>
+    <button id="themeBtn" class="iconbtn" aria-label="Toggle theme">☾</button>
+  </header>
+
+  <aside id="drawer" class="drawer" aria-label="Site navigation">
+    <div class="drawer__head">
+      <span class="logo">ml</span>
+      <div><div class="drawer__title">cb-ml</div><div class="drawer__sub">AI/ML · GenAI interview prep</div></div>
+    </div>
+    <nav id="drawerNav"></nav>
+  </aside>
+  <div id="scrim" class="scrim"></div>
+
+  <main id="main">
+    <span class="eyebrow">Part 3 · Train · Tune · Optimize · Evaluate</span>
+    <h1>Metrics &amp; Evaluation</h1>
+    <p class="lede">
+      “Is it good?” is the hardest question in ML, and the one that separates people who ship from people
+      who demo. This page covers the classic metrics — precision, recall, the decision threshold — and
+      the modern problem of evaluating LLMs, where there’s often no single right answer. Play with the
+      slider below to feel why <em>accuracy</em> is rarely the number that matters.
+    </p>
+
+    <div class="callout ladder">
+      <div class="callout__title">Where this sits on the ladder</div>
+      <strong>The judge for every rung.</strong> You can’t decide whether classical ML “is good enough”
+      (and you can stop climbing) without measuring it honestly. Picking the right metric and threshold —
+      not just training a model — is what turns a prototype into a decision you can defend to a customer.
+      <div class="chips">
+        <span class="chip">every rung</span>
+        <span class="chip">metric = business goal</span>
+        <span class="chip">threshold = a choice</span>
+      </div>
+    </div>
+
+    <nav class="toc" aria-label="On this page">
+      <div class="toc__title">On this page</div>
+      <ol>
+        <li><a href="#confusion">Confusion matrix &amp; the four numbers</a></li>
+        <li><a href="#pr">Precision, recall, F1</a></li>
+        <li><a href="#threshold">The threshold is a choice (interactive)</a></li>
+        <li><a href="#roc">ROC/AUC vs PR curves</a></li>
+        <li><a href="#calibration">Calibration &amp; imbalance</a></li>
+        <li><a href="#llm">Evaluating LLMs</a></li>
+        <li><a href="#qa">Interview Q&amp;A</a></li>
+        <li><a href="#code">Code: metrics &amp; LLM-as-judge</a></li>
+      </ol>
+    </nav>
+
+    <!-- ===== Confusion ===== -->
+    <h2 id="confusion">Confusion matrix &amp; the four numbers</h2>
+    <p>
+      Every binary classification outcome is one of four cells. Learn these cold — every metric is built
+      from them:
+    </p>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th></th><th>Predicted&nbsp;+</th><th>Predicted&nbsp;−</th></tr></thead>
+        <tbody>
+          <tr><th>Actual&nbsp;+</th><td><strong>TP</strong> ✓ caught it</td><td><strong>FN</strong> ✗ missed it</td></tr>
+          <tr><th>Actual&nbsp;−</th><td><strong>FP</strong> ✗ false alarm</td><td><strong>TN</strong> ✓ correct pass</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="callout warn">
+      <div class="callout__title">Why accuracy lies</div>
+      If 1% of transactions are fraud, a model that predicts “never fraud” is <strong>99% accurate</strong>
+      and utterly useless. On imbalanced problems (fraud, disease, defects) accuracy is a trap — you need
+      precision and recall.
+    </div>
+
+    <!-- ===== PR ===== -->
+    <h2 id="pr">Precision, recall, F1</h2>
+    <ul>
+      <li><strong>Precision</strong> = TP / (TP + FP) — <em>of the things I flagged, how many were right?</em>
+        Cost of a false alarm.</li>
+      <li><strong>Recall</strong> = TP / (TP + FN) — <em>of the things I should have caught, how many did I?</em>
+        Cost of a miss.</li>
+      <li><strong>F1</strong> = harmonic mean of the two — one number when you need a balance.</li>
+    </ul>
+    <div class="callout deeper">
+      <div class="callout__title">Which one you optimize IS a business decision</div>
+      Spam filter → precision (don’t trash a real email). Cancer screening → recall (never miss a case;
+      a false alarm just means another test). Fraud → depends on the cost of a blocked-legit vs a
+      missed-fraud. You can’t pick the metric without the business context — and interviewers love this.
+    </div>
+
+    <!-- ===== Threshold (interactive) ===== -->
+    <h2 id="threshold">The threshold is a choice — drag it</h2>
+    <p>
+      A classifier outputs a <strong>score</strong>, not a decision. <em>You</em> pick the threshold above
+      which a score counts as positive — and that choice trades precision against recall. Drag the slider:
+      watch the same model give very different precision/recall as you move the line.
+    </p>
+
+    <div class="figure">
+      <svg viewBox="0 0 400 210" role="img" aria-label="Interactive threshold: positive and negative examples plotted by model score, with a movable decision threshold">
+        <!-- shaded 'predicted positive' region (right of threshold), moved by JS -->
+        <rect id="posRegion" x="240" y="20" width="150" height="150" fill="var(--good, #3fb950)" opacity="0.08"/>
+        <!-- axis -->
+        <line x1="20" y1="175" x2="380" y2="175" stroke="var(--border-strong,#3a4457)"/>
+        <text x="20" y="192" font-size="10" fill="var(--text-muted,#9aa7b8)">score 0</text>
+        <text x="360" y="192" font-size="10" fill="var(--text-muted,#9aa7b8)">1</text>
+        <!-- row labels -->
+        <text x="16" y="55" font-size="10" fill="#7c8cff" transform="rotate(-90 16 55)" text-anchor="middle">positives</text>
+        <text x="16" y="130" font-size="10" fill="var(--text-muted,#9aa7b8)" transform="rotate(-90 16 130)" text-anchor="middle">negatives</text>
+        <!-- points injected by JS -->
+        <g id="ptsPos"></g>
+        <g id="ptsNeg"></g>
+        <!-- threshold line -->
+        <line id="threshLine" x1="240" y1="20" x2="240" y2="175" stroke="#f0b429" stroke-width="2.5"/>
+        <text id="threshLabel" x="240" y="16" font-size="10" fill="#f0b429" text-anchor="middle">0.55</text>
+      </svg>
+      <div class="controls">
+        <label for="thr" style="font-size:.8rem;color:var(--text-muted)">threshold</label>
+        <input id="thr" type="range" min="0" max="1" step="0.01" value="0.55" aria-label="decision threshold">
+      </div>
+      <div class="readout">
+        <span>TP <b id="mTP">0</b></span>
+        <span>FP <b id="mFP">0</b></span>
+        <span>FN <b id="mFN">0</b></span>
+        <span>precision <b id="mPrec">0</b></span>
+        <span>recall <b id="mRec">0</b></span>
+        <span>F1 <b id="mF1">0</b></span>
+      </div>
+      <div class="figure__cap">Points right of the line are predicted positive. Move it left → recall rises but precision falls (more false alarms). Move it right → precision rises but you miss more. Same model, your call.</div>
+    </div>
+
+    <!-- ===== ROC ===== -->
+    <h2 id="roc">ROC/AUC vs PR curves</h2>
+    <p>
+      Rather than commit to one threshold, plot performance across <em>all</em> of them:
+    </p>
+    <ul>
+      <li><strong>ROC curve</strong> — true-positive rate vs false-positive rate across thresholds.
+        <strong>AUC</strong> (area under it) = probability the model ranks a random positive above a
+        random negative. 0.5 = random, 1.0 = perfect. Threshold-independent single number.</li>
+      <li><strong>PR curve</strong> — precision vs recall. <strong>Preferred for imbalanced data</strong>,
+        because ROC/AUC can look deceptively good when negatives vastly outnumber positives.</li>
+    </ul>
+
+    <!-- ===== Calibration ===== -->
+    <h2 id="calibration">Calibration &amp; class imbalance</h2>
+    <p>
+      A model is <strong>calibrated</strong> if its predicted probabilities mean what they say: among
+      samples it scores 0.8, about 80% are truly positive. Ranking (AUC) can be great while calibration is
+      terrible — and if you act on the probability (expected-value decisions, thresholds tied to cost),
+      calibration matters. Fixes: Platt scaling, isotonic regression, temperature scaling.
+    </p>
+    <p>
+      For <strong>imbalance</strong>: use PR metrics, resample (SMOTE/undersample), class weights, and
+      pick the threshold from the cost of each error — not the default 0.5.
+    </p>
+
+    <!-- ===== LLM eval ===== -->
+    <h2 id="llm">Evaluating LLMs — when there’s no single right answer</h2>
+    <p>
+      Classification has a ground truth; “write a summary” doesn’t. Modern LLM eval is a toolbox:
+    </p>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>Method</th><th>Measures</th><th>Note</th></tr></thead>
+        <tbody>
+          <tr><td><strong>Perplexity</strong></td><td>How well the model predicts held-out text</td><td>Intrinsic; good for pretraining, weak for task quality</td></tr>
+          <tr><td><strong>BLEU / ROUGE</strong></td><td>N-gram overlap with a reference</td><td>Translation/summarization; brittle, misses paraphrase</td></tr>
+          <tr><td><strong>BERTScore</strong></td><td>Embedding similarity to a reference</td><td>Captures meaning better than n-grams</td></tr>
+          <tr><td><strong>Exact match / unit tests</strong></td><td>Is the answer exactly right / does code pass?</td><td>Great when there IS a right answer (math, code)</td></tr>
+          <tr><td><strong>LLM-as-a-judge</strong></td><td>A strong LLM scores outputs on a rubric</td><td>Scalable, flexible; the modern default for open-ended</td></tr>
+          <tr><td><strong>Human eval</strong></td><td>People rate/rank outputs</td><td>Gold standard; slow and costly</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>
+      <strong>Benchmarks</strong> you should recognize: <strong>MMLU</strong> (broad knowledge),
+      <strong>HumanEval</strong> (code), <strong>GSM8K</strong> (grade-school math reasoning). For RAG
+      specifically, measure <em>faithfulness</em> (grounded, no hallucination) and <em>answer relevance</em>
+      (see <a href="p2-rag.html">RAG</a>). <strong>Red-teaming</strong> — adversarially probing for unsafe
+      or jailbreakable behavior — is the safety-side of evaluation.
+    </p>
+    <div class="callout warn">
+      <div class="callout__title">FDE reality</div>
+      Public benchmarks are contaminated and rarely match your task. The thing that actually ships is a
+      small, task-specific <strong>eval set of real examples</strong> with an LLM-as-judge or human review —
+      your own regression test suite for prompts, RAG, and models. Build that before optimizing anything.
+    </div>
+
+    <!-- ===== Q&A ===== -->
+    <h2 id="qa">Interview Q&amp;A</h2>
+
+    <details class="qa">
+      <summary class="qa__q"><span class="badge core">core</span>Precision vs recall — when do you optimize which?</summary>
+      <div class="qa__a">
+        <p>
+          Precision (of what I flagged, how much was right) matters when false positives are costly — spam
+          filtering, blocking legitimate transactions. Recall (of what I should catch, how much I caught)
+          matters when misses are costly — cancer screening, fraud, safety. You choose based on the
+          relative cost of a false alarm vs a miss, which is a business decision, and F1 balances the two
+          when you need a single number. There’s no universally “right” one — it depends on the problem.
+        </p>
+      </div>
+    </details>
+
+    <details class="qa">
+      <summary class="qa__q"><span class="badge trap">trap</span>Your model is 99% accurate. Are you happy?</summary>
+      <div class="qa__a">
+        <p>
+          Not without knowing the base rate. If positives are 1% of the data, predicting “always negative”
+          scores 99% and catches nothing — accuracy is meaningless on imbalanced problems. I’d look at
+          precision, recall, the PR curve, and the confusion matrix, and choose a threshold from the cost
+          of each error type. High accuracy on skewed data is a red flag, not a win.
+        </p>
+      </div>
+    </details>
+
+    <details class="qa">
+      <summary class="qa__q"><span class="badge core">core</span>What does the decision threshold do, and how do you pick it?</summary>
+      <div class="qa__a">
+        <p>
+          The model outputs a score; the threshold converts it to a yes/no. Lowering it increases recall
+          but decreases precision (more false alarms); raising it does the opposite. You pick it by mapping
+          each error to its business cost and choosing the operating point that minimizes total cost (or
+          hits a required recall/precision) — often via the PR curve — rather than defaulting to 0.5. It’s
+          a deliberate choice, not a fixed property of the model.
+        </p>
+      </div>
+    </details>
+
+    <details class="qa">
+      <summary class="qa__q"><span class="badge senior">senior</span>ROC/AUC or PR curve — which for a rare-positive problem?</summary>
+      <div class="qa__a">
+        <p>
+          PR. ROC/AUC uses the false-positive rate, which stays low simply because negatives are so
+          numerous, so AUC can look great even when the model floods you with false positives relative to
+          the few true positives. The precision-recall curve focuses on the positive class and exposes that
+          tradeoff directly, so it’s far more informative under heavy class imbalance.
+        </p>
+      </div>
+    </details>
+
+    <details class="qa">
+      <summary class="qa__q"><span class="badge senior">senior</span>How do you evaluate an LLM feature where there’s no single correct answer?</summary>
+      <div class="qa__a">
+        <p>
+          Build a task-specific eval set of representative real inputs with either reference answers or a
+          scoring rubric, then measure with the right tool: exact-match/unit-tests where a right answer
+          exists (math, code, extraction), embedding or LLM-as-judge scoring for open-ended text, and human
+          review as the gold standard on a sample. For RAG, score faithfulness and answer relevance
+          separately. Treat it as a regression suite you run on every prompt/model change — public
+          benchmarks are a starting signal, not proof it works on your task.
+        </p>
+      </div>
+    </details>
+
+    <details class="qa">
+      <summary class="qa__q"><span class="badge trap">trap</span>What’s the risk of using an LLM as a judge?</summary>
+      <div class="qa__a">
+        <p>
+          LLM judges have biases: they can favor longer answers, prefer their own model family, be
+          sensitive to option order, and be gamed by confident-sounding but wrong text. Mitigate with clear
+          rubrics, pairwise comparisons, randomized positions, a strong judge model, and periodic
+          calibration against human labels. It’s scalable and often good enough, but you validate the judge
+          itself rather than trusting it blindly.
+        </p>
+      </div>
+    </details>
+
+    <!-- ===== Code ===== -->
+    <h2 id="code">Code: metrics + a threshold sweep, and LLM-as-judge</h2>
+    <p>
+      The threshold sweep is exactly what the slider above does, in code — compute precision/recall at
+      every threshold and pick the operating point your business needs.
+    </p>
+
+    <div class="codewrap">
+      <div class="codewrap__bar"><span class="codewrap__lang">python</span><span>confusion matrix + threshold sweep (scikit-learn)</span><button class="copybtn" type="button">Copy</button></div>
+<pre><code class="language-python"># Metrics from scores, and choosing a threshold by business cost (not 0.5).
+# pip install scikit-learn numpy
+import numpy as np
+from sklearn.metrics import (confusion_matrix, precision_recall_curve,
+                             roc_auc_score, average_precision_score)
+
+y_true  = np.array([0, 0, 1, 1, 0, 1, 0, 1, 1, 0])          # ground truth
+y_score = np.array([.1, .4, .35, .8, .2, .65, .5, .9, .55, .3])  # model scores
+
+# Threshold-independent quality:
+print("ROC-AUC:", round(roc_auc_score(y_true, y_score), 3))         # ranking quality
+print("PR-AUC :", round(average_precision_score(y_true, y_score), 3))  # better under imbalance
+
+# Sweep every threshold -> precision/recall pairs (what the slider visualizes).
+prec, rec, thr = precision_recall_curve(y_true, y_score)
+
+# Pick the threshold that meets a business rule, e.g. "recall must be >= 0.8".
+ok = rec[:-1] >= 0.80                     # last point has no threshold; drop it
+best_t = thr[ok][np.argmax(prec[:-1][ok])]  # among those, maximize precision
+print("chosen threshold:", round(float(best_t), 2))
+
+# Apply it and inspect the confusion matrix at THAT operating point.
+y_pred = (y_score >= best_t).astype(int)
+tn, fp, fn, tp = confusion_matrix(y_true, y_pred).ravel()
+print(f"TP={tp} FP={fp} FN={fn} TN={tn}")
+# The threshold is a dial you set from costs — not a fixed property of the model.
+</code></pre>
+    </div>
+
+    <div class="codewrap">
+      <div class="codewrap__bar"><span class="codewrap__lang">python</span><span>a minimal LLM-as-judge eval harness</span><button class="copybtn" type="button">Copy</button></div>
+<pre><code class="language-python"># Evaluate open-ended outputs with an LLM judge scoring against a rubric.
+# pip install openai pydantic
+from openai import OpenAI
+from pydantic import BaseModel
+client = OpenAI()
+
+class Judgement(BaseModel):
+    score: int          # 1-5
+    reason: str
+
+JUDGE_RUBRIC = (
+    "You are a strict evaluator. Score the ANSWER's faithfulness to the CONTEXT "
+    "from 1 (fabricated) to 5 (fully grounded). Return JSON {score, reason}."
+)
+
+def judge(context: str, answer: str) -> Judgement:
+    resp = client.chat.completions.create(
+        model="gpt-4o",                       # use a STRONG model as the judge
+        temperature=0,                        # deterministic scoring
+        response_format={"type": "json_object"},
+        messages=[
+            {"role": "system", "content": JUDGE_RUBRIC},
+            {"role": "user", "content": f"CONTEXT:\n{context}\n\nANSWER:\n{answer}"},
+        ],
+    )
+    return Judgement.model_validate_json(resp.choices[0].message.content)
+
+# Run across your eval set and aggregate — this is your regression suite.
+evalset = [
+    {"context": "The Pro plan costs $49/mo.", "answer": "It's $49 a month."},   # grounded
+    {"context": "The Pro plan costs $49/mo.", "answer": "It's $99 a month."},   # wrong
+]
+scores = [judge(e["context"], e["answer"]).score for e in evalset]
+print("mean faithfulness:", sum(scores) / len(scores))
+# Validate the judge against a few human labels before trusting it at scale.
+</code></pre>
+    </div>
+
+    <div class="callout">
+      <div class="callout__title">The habit to build</div>
+      Whatever the rung — GBM or LLM — <strong>define the metric and the eval set before you optimize</strong>.
+      The metric is your business goal in numbers; the threshold is your cost tradeoff made explicit. Models
+      are easy; measuring them honestly is the job.
+    </div>
+
+    <nav class="pagenav" id="pageNav" aria-label="Page navigation"></nav>
+    <div class="sitefoot">cb-ml · Part 3 · Train · Tune · Optimize · Evaluate</div>
+  </main>
+
+  <!-- ===== Page-specific: interactive precision/recall threshold ===== -->
+  <script>
+    (function () {
+      // Deterministic scored examples (no RNG). x = 20 + score*360 in the 400-wide viewBox.
+      var POS = [0.55,0.6,0.62,0.68,0.7,0.72,0.75,0.78,0.8,0.85,0.9,0.45,0.5,0.4,0.65,0.58];  // true positives
+      var NEG = [0.1,0.15,0.2,0.25,0.3,0.32,0.38,0.42,0.45,0.5,0.55,0.6,0.18,0.28,0.48,0.35]; // true negatives
+      var X = function (s) { return 20 + s * 360; };
+
+      var gPos = document.getElementById("ptsPos");
+      var gNeg = document.getElementById("ptsNeg");
+      function dots(scores, y, host) {
+        host.innerHTML = scores.map(function (s) {
+          return '<circle data-s="' + s + '" cx="' + X(s).toFixed(1) + '" cy="' + y + '" r="5"></circle>';
+        }).join("");
+      }
+      dots(POS, 55, gPos);
+      dots(NEG, 130, gNeg);
+
+      var line = document.getElementById("threshLine");
+      var label = document.getElementById("threshLabel");
+      var region = document.getElementById("posRegion");
+      var slider = document.getElementById("thr");
+      var out = {
+        TP: document.getElementById("mTP"), FP: document.getElementById("mFP"),
+        FN: document.getElementById("mFN"), Prec: document.getElementById("mPrec"),
+        Rec: document.getElementById("mRec"), F1: document.getElementById("mF1"),
+      };
+
+      function update() {
+        var t = parseFloat(slider.value);
+        var x = X(t);
+        line.setAttribute("x1", x); line.setAttribute("x2", x);
+        label.setAttribute("x", x); label.textContent = t.toFixed(2);
+        region.setAttribute("x", x); region.setAttribute("width", Math.max(0, 390 - x));
+
+        // Predicted positive = score >= threshold.
+        var TP = POS.filter(function (s) { return s >= t; }).length;   // positives caught
+        var FN = POS.length - TP;                                      // positives missed
+        var FP = NEG.filter(function (s) { return s >= t; }).length;   // negatives flagged
+        // recolor dots: green = correctly handled, red = error
+        gPos.querySelectorAll("circle").forEach(function (c) {
+          var s = +c.getAttribute("data-s");
+          c.setAttribute("fill", s >= t ? "#3fb950" : "#f85149");      // TP green / FN red
+        });
+        gNeg.querySelectorAll("circle").forEach(function (c) {
+          var s = +c.getAttribute("data-s");
+          c.setAttribute("fill", s >= t ? "#f85149" : "#3fb950");      // FP red / TN green
+        });
+
+        var prec = TP + FP ? TP / (TP + FP) : 0;
+        var rec = TP + FN ? TP / (TP + FN) : 0;
+        var f1 = prec + rec ? 2 * prec * rec / (prec + rec) : 0;
+        out.TP.textContent = TP; out.FP.textContent = FP; out.FN.textContent = FN;
+        out.Prec.textContent = prec.toFixed(2);
+        out.Rec.textContent = rec.toFixed(2);
+        out.F1.textContent = f1.toFixed(2);
+      }
+      slider.addEventListener("input", update);
+      update();
+    })();
+  </script>
+</body>
+</html>

@@ -37,7 +37,7 @@ Legend: `[ ]` todo · `[~]` in progress · `[x]` done
 - [x] `p3-fine-tuning.html` — LoRA/QLoRA, RLHF/DPO/GRPO, fine-tune vs RAG vs prompt
 - [x] `p3-inference-optimization.html` — KV cache, quantization, batching, speculative decoding, latency SLAs
 - [x] `p3-fitting-generalization.html` — over/underfit, bias-variance, regularization, double descent, leakage
-- [ ] `p3-metrics-evaluation.html` — precision/recall/threshold/calibration + LLM eval, LLM-as-judge
+- [x] `p3-metrics-evaluation.html` — precision/recall/threshold/calibration + LLM eval, LLM-as-judge (incl. live threshold slider)
 
 ## Part 4 · Production & Problem-Solving (FDE core)
 - [ ] `p4-mlops-production.html` — drift/monitoring, canary/shadow, guardrails, PII
