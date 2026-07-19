@@ -42,14 +42,18 @@ python3 -m http.server 8000
 # then open http://localhost:8000
 ```
 
-## Enabling GitHub Pages
+## Enabling GitHub Pages (one-time, ~20 seconds)
 
-Deployment is automated by [`.github/workflows/pages.yml`](.github/workflows/pages.yml): every
-push to `main` builds and publishes the site, and the workflow self-enables Pages on first run.
+The site is plain static files served straight from `main`, so no build/Action is needed
+(a `.nojekyll` file tells GitHub to serve the files as-is). Turn Pages on once:
 
-If Pages isn't live after the first Action succeeds, enable it manually:
-**Settings → Pages → Build and deployment → Source: _GitHub Actions_**
-(or _Deploy from a branch_ → `main` / `/root`).
+1. Go to the repo on GitHub → **Settings → Pages**.
+2. Under **Build and deployment → Source**, choose **Deploy from a branch**.
+3. Set **Branch: `main`** and **folder: `/ (root)`**, then **Save**.
+4. Wait ~1 minute, then open **https://chandanbharadwaj.github.io/cb-ml/**.
+
+Every later `git push` to `main` updates the live site automatically. (GitHub can't enable
+Pages via the API for a repo that never had it, which is why this one manual step is required.)
 
 ---
 

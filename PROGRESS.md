@@ -18,8 +18,9 @@ Legend: `[ ]` todo · `[~]` in progress · `[x]` done
 - [x] `assets/app.js` — nav drawer, cards, theme, copy-code, scroll-spy (single SITE-map source)
 - [x] `index.html` — landing + **interactive escalation-ladder hero SVG**
 - [x] `p1-transformers-nlp.html` — **reference page** (locks the template)
-- [x] `.nojekyll`, `.github/workflows/pages.yml`, `PROGRESS.md`, `README.md`
-- [x] Commit + push to `main`, verify live GitHub Pages URL renders
+- [x] `.nojekyll`, `PROGRESS.md`, `README.md` (branch-based Pages — no Actions workflow)
+- [x] Commit + push to `main`; verified locally at 390px viewport
+- [ ] **User action (one-time):** enable Pages → Settings → Pages → Deploy from a branch → `main` / root
 
 ## Part 1 · Foundations & Concepts
 - [ ] `p1-ml-deep-learning.html` — classical baselines (GBM on tabular) → neurons, backprop, optimizers; GBM-vs-MLP side by side
