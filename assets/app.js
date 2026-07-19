@@ -47,7 +47,7 @@ window.CBML_NAV = [
       { href: "p3-inference-optimization.html", title: "Inference Optimization",
         desc: "KV cache, quantization, batching, speculative decoding, latency SLAs." },
       { href: "p3-fitting-generalization.html", title: "Fitting & Generalization",
-        desc: "Over/underfitting, bias-variance, regularization, double descent, leakage.", soon: true },
+        desc: "Over/underfitting, bias-variance, regularization, double descent, leakage." },
       { href: "p3-metrics-evaluation.html", title: "Metrics & Evaluation",
         desc: "Precision/recall/threshold/calibration + LLM eval and LLM-as-judge.", soon: true },
     ],

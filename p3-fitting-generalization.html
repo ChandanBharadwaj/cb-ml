@@ -1,0 +1,354 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Fitting &amp; Generalization · cb-ml</title>
+  <meta name="description" content="Overfitting vs underfitting, the bias-variance tradeoff, train/val/test discipline, regularization, double descent, and data leakage — the fundamentals of a model that generalizes.">
+  <script>(function(){try{var t=localStorage.getItem('cbml-theme');if(t)document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+  <link rel="stylesheet" href="assets/styles.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+  <script defer src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+  <script defer src="assets/app.js"></script>
+</head>
+<body>
+  <a class="skip" href="#main">Skip to content</a>
+
+  <header class="topbar">
+    <button id="menuBtn" class="iconbtn" aria-label="Open navigation" aria-expanded="false">☰</button>
+    <a class="topbar__brand" href="index.html"><span class="logo">ml</span> cb-ml</a>
+    <span class="topbar__spacer"></span>
+    <button id="themeBtn" class="iconbtn" aria-label="Toggle theme">☾</button>
+  </header>
+
+  <aside id="drawer" class="drawer" aria-label="Site navigation">
+    <div class="drawer__head">
+      <span class="logo">ml</span>
+      <div><div class="drawer__title">cb-ml</div><div class="drawer__sub">AI/ML · GenAI interview prep</div></div>
+    </div>
+    <nav id="drawerNav"></nav>
+  </aside>
+  <div id="scrim" class="scrim"></div>
+
+  <main id="main">
+    <span class="eyebrow">Part 3 · Train · Tune · Optimize · Evaluate</span>
+    <h1>Fitting &amp; Generalization</h1>
+    <p class="lede">
+      The most fundamental question in all of ML: does your model actually work on data it hasn’t seen?
+      A model that memorizes the training set is worthless in production. This page is the classic
+      material — over/underfitting, bias-variance, regularization — and it applies at <em>every</em> rung
+      of the ladder, from a GBM to a fine-tuned LLM.
+    </p>
+
+    <div class="callout ladder">
+      <div class="callout__title">Where this sits on the ladder</div>
+      <strong>Rung-agnostic — it governs every model you train.</strong> Whether you fit gradient-boosted
+      trees or fine-tune a transformer, the same discipline decides success: hold out data honestly,
+      watch the generalization gap, and regularize. Overfitting is the failure mode that quietly makes a
+      great-looking model useless in production.
+      <div class="chips">
+        <span class="chip">every rung</span>
+        <span class="chip">train ≠ deploy</span>
+        <span class="chip">generalization</span>
+      </div>
+    </div>
+
+    <nav class="toc" aria-label="On this page">
+      <div class="toc__title">On this page</div>
+      <ol>
+        <li><a href="#over-under">Overfitting vs underfitting</a></li>
+        <li><a href="#bias-variance">The bias-variance tradeoff</a></li>
+        <li><a href="#splits">Train / validation / test</a></li>
+        <li><a href="#regularization">Regularization</a></li>
+        <li><a href="#leakage">Data leakage</a></li>
+        <li><a href="#double-descent">Double descent (modern note)</a></li>
+        <li><a href="#qa">Interview Q&amp;A</a></li>
+        <li><a href="#code">Code: spotting overfitting</a></li>
+      </ol>
+    </nav>
+
+    <!-- ===== Over/under ===== -->
+    <h2 id="over-under">Overfitting vs underfitting</h2>
+    <ul>
+      <li><strong>Underfitting</strong> — the model is too simple to capture the pattern. High error on
+        <em>both</em> train and test. (A straight line through a curve.)</li>
+      <li><strong>Overfitting</strong> — the model memorizes the training data, including its noise.
+        Low train error, high test error. (A wiggly curve through every point.)</li>
+      <li><strong>Good fit</strong> — captures the real signal, ignores the noise. Low error on both,
+        with a small gap between them.</li>
+    </ul>
+
+    <div class="figure">
+      <svg viewBox="0 0 420 160" role="img" aria-label="Three fits to the same scattered points: underfit straight line, good fit smooth curve, overfit wiggly curve">
+        <g font-family="monospace" font-size="10" text-anchor="middle">
+          <!-- underfit -->
+          <g>
+            <circle cx="30" cy="120" r="3" fill="var(--text-muted,#9aa7b8)"/><circle cx="55" cy="95" r="3" fill="var(--text-muted,#9aa7b8)"/><circle cx="80" cy="105" r="3" fill="var(--text-muted,#9aa7b8)"/><circle cx="105" cy="70" r="3" fill="var(--text-muted,#9aa7b8)"/>
+            <line x1="25" y1="115" x2="110" y2="80" stroke="#f85149" stroke-width="2.5"/>
+            <text x="67" y="150" fill="#f85149">underfit</text>
+          </g>
+          <!-- good fit -->
+          <g>
+            <circle cx="170" cy="120" r="3" fill="var(--text-muted,#9aa7b8)"/><circle cx="195" cy="95" r="3" fill="var(--text-muted,#9aa7b8)"/><circle cx="220" cy="105" r="3" fill="var(--text-muted,#9aa7b8)"/><circle cx="245" cy="70" r="3" fill="var(--text-muted,#9aa7b8)"/>
+            <path d="M165,122 Q195,88 220,100 T250,68" fill="none" stroke="#3fb950" stroke-width="2.5"/>
+            <text x="207" y="150" fill="#3fb950">good fit</text>
+          </g>
+          <!-- overfit -->
+          <g>
+            <circle cx="310" cy="120" r="3" fill="var(--text-muted,#9aa7b8)"/><circle cx="335" cy="95" r="3" fill="var(--text-muted,#9aa7b8)"/><circle cx="360" cy="105" r="3" fill="var(--text-muted,#9aa7b8)"/><circle cx="385" cy="70" r="3" fill="var(--text-muted,#9aa7b8)"/>
+            <path d="M310,120 Q322,60 335,95 Q348,150 360,105 Q372,50 385,70" fill="none" stroke="#f0b429" stroke-width="2.5"/>
+            <text x="347" y="150" fill="#f0b429">overfit</text>
+          </g>
+        </g>
+      </svg>
+      <div class="figure__cap">Same points, three models. The overfit curve nails every training point — including the noise — and will generalize worst. The good fit ignores the wiggles.</div>
+    </div>
+
+    <!-- ===== Bias-variance ===== -->
+    <h2 id="bias-variance">The bias-variance tradeoff</h2>
+    <p>
+      The lens behind fitting. Total error decomposes into:
+    </p>
+    <ul>
+      <li><strong>Bias</strong> — error from wrong assumptions / too-simple a model (→ underfitting).</li>
+      <li><strong>Variance</strong> — error from sensitivity to the particular training set (→ overfitting).</li>
+      <li><strong>Irreducible noise</strong> — the floor you can’t beat.</li>
+    </ul>
+    <p>
+      Classically, lowering one raises the other, and you seek the sweet spot. Think of a dartboard:
+    </p>
+
+    <div class="figure">
+      <svg viewBox="0 0 420 170" role="img" aria-label="Bias-variance as dartboards: low-bias-low-variance hits the center tightly; high variance scatters; high bias clusters off-center">
+        <g>
+          <!-- board 1: good -->
+          <circle cx="70" cy="75" r="45" fill="none" stroke="var(--border,#2a3140)"/><circle cx="70" cy="75" r="28" fill="none" stroke="var(--border,#2a3140)"/><circle cx="70" cy="75" r="10" fill="none" stroke="#3fb950"/>
+          <g fill="#3fb950"><circle cx="68" cy="73" r="3"/><circle cx="73" cy="76" r="3"/><circle cx="70" cy="70" r="3"/><circle cx="66" cy="78" r="3"/></g>
+          <text x="70" y="145" text-anchor="middle" font-size="9" fill="#3fb950">low bias, low variance</text>
+        </g>
+        <g>
+          <!-- board 2: high variance -->
+          <circle cx="210" cy="75" r="45" fill="none" stroke="var(--border,#2a3140)"/><circle cx="210" cy="75" r="28" fill="none" stroke="var(--border,#2a3140)"/><circle cx="210" cy="75" r="10" fill="none" stroke="#f0b429"/>
+          <g fill="#f0b429"><circle cx="200" cy="60" r="3"/><circle cx="230" cy="72" r="3"/><circle cx="205" cy="95" r="3"/><circle cx="225" cy="55" r="3"/><circle cx="195" cy="88" r="3"/></g>
+          <text x="210" y="145" text-anchor="middle" font-size="9" fill="#f0b429">low bias, high variance</text>
+        </g>
+        <g>
+          <!-- board 3: high bias -->
+          <circle cx="350" cy="75" r="45" fill="none" stroke="var(--border,#2a3140)"/><circle cx="350" cy="75" r="28" fill="none" stroke="var(--border,#2a3140)"/><circle cx="350" cy="75" r="10" fill="none" stroke="#f85149"/>
+          <g fill="#f85149"><circle cx="375" cy="100" r="3"/><circle cx="380" cy="105" r="3"/><circle cx="372" cy="108" r="3"/><circle cx="378" cy="95" r="3"/></g>
+          <text x="350" y="145" text-anchor="middle" font-size="9" fill="#f85149">high bias (off-center)</text>
+        </g>
+      </svg>
+      <div class="figure__cap">Variance = scatter (inconsistent, overfit); bias = a consistent miss off the bullseye (too-simple, underfit). You want tight and centered.</div>
+    </div>
+
+    <!-- ===== Splits ===== -->
+    <h2 id="splits">Train / validation / test</h2>
+    <p>
+      The discipline that keeps you honest. Split your data three ways:
+    </p>
+    <ul>
+      <li><strong>Train</strong> — fit the model.</li>
+      <li><strong>Validation</strong> — tune hyperparameters &amp; pick models. You look at this a lot.</li>
+      <li><strong>Test</strong> — touch <em>once</em>, at the end, to estimate real-world performance.</li>
+    </ul>
+    <p>
+      With limited data, use <strong>k-fold cross-validation</strong>: rotate which fold is held out and
+      average, for a more stable estimate. The <strong>generalization gap</strong> (train vs validation
+      performance) is your overfitting gauge.
+    </p>
+    <div class="callout warn">
+      <div class="callout__title">The cardinal sin</div>
+      If you tune against the <em>test</em> set, it stops being an honest estimate — you’ve overfit to it
+      through your own choices. Look at test once. For time-series, split by <em>time</em>, never randomly,
+      or you leak the future into the past.
+    </div>
+
+    <!-- ===== Regularization ===== -->
+    <h2 id="regularization">Regularization — fighting overfitting</h2>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>Technique</th><th>How it helps</th><th>Where</th></tr></thead>
+        <tbody>
+          <tr><td><strong>L1 / L2 (weight decay)</strong></td><td>Penalize large weights → simpler model</td><td>Most models; L1 also does feature selection</td></tr>
+          <tr><td><strong>Dropout</strong></td><td>Randomly drop neurons in training → can’t co-adapt</td><td>Neural nets</td></tr>
+          <tr><td><strong>Early stopping</strong></td><td>Stop when validation loss stops improving</td><td>Any iterative training</td></tr>
+          <tr><td><strong>Data augmentation</strong></td><td>Synthetic variations → effectively more data</td><td>Images, audio, text</td></tr>
+          <tr><td><strong>More data</strong></td><td>The best regularizer of all</td><td>Everywhere, if you can get it</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- ===== Leakage ===== -->
+    <h2 id="leakage">Data leakage — the silent killer</h2>
+    <p>
+      <strong>Data leakage</strong> is when information that won’t be available at prediction time sneaks
+      into training — giving amazing offline scores that collapse in production. It’s the most common
+      reason a model that “worked” fails on launch. Classic forms:
+    </p>
+    <ul>
+      <li><strong>Target leakage</strong> — a feature that’s a proxy for (or derived from) the label
+        (e.g. “was_refunded” to predict “will_churn”).</li>
+      <li><strong>Train/test contamination</strong> — scaling/encoding fit on the full dataset before
+        splitting, or duplicate rows across splits.</li>
+      <li><strong>Temporal leakage</strong> — using future information to predict the past.</li>
+    </ul>
+    <div class="callout deeper">
+      <div class="callout__title">FDE instinct</div>
+      When results look <em>too</em> good, suspect leakage before celebrating. Ask: “Would this feature
+      actually exist, with this value, at the moment we predict?” If not, it’s leaking.
+    </div>
+
+    <!-- ===== Double descent ===== -->
+    <h2 id="double-descent">Double descent (modern note)</h2>
+    <p>
+      The classic bias-variance U-curve says error rises once a model gets too big. Modern deep learning
+      complicated that: as you keep growing an over-parameterized model <em>past</em> the interpolation
+      point, test error can <em>drop again</em> — “double descent.” It’s why enormous LLMs generalize
+      despite having far more parameters than data points. The classic intuition still guides day-to-day
+      work, but know that “bigger always overfits” isn’t strictly true at modern scale.
+    </p>
+
+    <!-- ===== Q&A ===== -->
+    <h2 id="qa">Interview Q&amp;A</h2>
+
+    <details class="qa">
+      <summary class="qa__q"><span class="badge core">core</span>How do you detect and fix overfitting?</summary>
+      <div class="qa__a">
+        <p>
+          Detect it by the gap: low training error but much higher validation/test error means the model
+          memorized the training set. Fix it by reducing capacity or adding regularization — L2/weight
+          decay, dropout, early stopping, data augmentation — and, best of all, more data. For trees, cap
+          depth / increase min-samples; for nets, dropout + early stopping. Underfitting (high error
+          everywhere) is the opposite fix: a more expressive model or better features.
+        </p>
+      </div>
+    </details>
+
+    <details class="qa">
+      <summary class="qa__q"><span class="badge core">core</span>Explain the bias-variance tradeoff.</summary>
+      <div class="qa__a">
+        <p>
+          Expected error decomposes into bias (error from an overly simple model — underfitting),
+          variance (sensitivity to the specific training sample — overfitting), and irreducible noise.
+          Simple models have high bias/low variance; complex ones low bias/high variance. Classically you
+          balance them for minimum total error. Regularization trades a little bias for a lot less
+          variance, which is usually a good deal.
+        </p>
+      </div>
+    </details>
+
+    <details class="qa">
+      <summary class="qa__q"><span class="badge trap">trap</span>Your model scores 99% offline but fails in production. First thing you suspect?</summary>
+      <div class="qa__a">
+        <p>
+          Data leakage. A feature that won’t exist (or won’t have that value) at prediction time —
+          target leakage, temporal leakage, or fitting preprocessing on the whole dataset before
+          splitting — inflates offline scores and vanishes in production. I’d audit every feature with
+          “is this available, with this value, at inference time?”, check that scalers/encoders were fit
+          on train only, and verify no row overlap or future information across splits.
+        </p>
+      </div>
+    </details>
+
+    <details class="qa">
+      <summary class="qa__q"><span class="badge senior">senior</span>Why can’t you use the test set to pick your model?</summary>
+      <div class="qa__a">
+        <p>
+          Because every decision you make based on the test set fits your process to that set, so it stops
+          being an unbiased estimate of real-world performance — you’ve leaked it through model selection.
+          That’s why you tune on validation and touch test once at the end. With limited data, k-fold
+          cross-validation gives a more stable estimate without burning a separate test set prematurely.
+        </p>
+      </div>
+    </details>
+
+    <details class="qa">
+      <summary class="qa__q"><span class="badge senior">senior</span>Does “bigger model = more overfitting” always hold?</summary>
+      <div class="qa__a">
+        <p>
+          Not at modern scale. The classic U-curve says test error rises once capacity is too high, but
+          deep learning shows <em>double descent</em>: past the interpolation threshold, hugely
+          over-parameterized models can generalize <em>better</em> again, aided by implicit regularization
+          from the optimizer and by scale. It’s a big reason massive LLMs work. The classic tradeoff still
+          guides most practical modeling, but it isn’t a universal law at the extremes.
+        </p>
+      </div>
+    </details>
+
+    <details class="qa">
+      <summary class="qa__q"><span class="badge trap">trap</span>How do you split a time-series dataset?</summary>
+      <div class="qa__a">
+        <p>
+          Chronologically — train on the past, validate/test on the future, never a random shuffle. A
+          random split lets the model see future points while predicting earlier ones, which leaks
+          information and gives optimistic scores that won’t hold live. Use forward-chaining / rolling-window
+          cross-validation so every evaluation only uses data that would have been available at that time.
+        </p>
+      </div>
+    </details>
+
+    <!-- ===== Code ===== -->
+    <h2 id="code">Code: spotting overfitting with early stopping</h2>
+    <p>
+      The most useful diagnostic in ML: plot train vs validation loss. When validation stops improving
+      while train keeps dropping, you’re overfitting — and early stopping halts you at the sweet spot.
+    </p>
+
+    <div class="codewrap">
+      <div class="codewrap__bar"><span class="codewrap__lang">python</span><span>train vs validation loss + early stopping (PyTorch)</span><button class="copybtn" type="button">Copy</button></div>
+<pre><code class="language-python"># The generalization gap in code: watch train vs validation loss, stop early.
+import torch, torch.nn as nn
+
+# Assume X_tr, y_tr, X_val, y_val are float tensors already prepared.
+model = nn.Sequential(nn.Linear(20, 128), nn.ReLU(),
+                      nn.Dropout(0.3),            # dropout = regularization
+                      nn.Linear(128, 1))
+loss_fn = nn.BCEWithLogitsLoss()
+# weight_decay = L2 regularization, another overfitting defense.
+opt = torch.optim.AdamW(model.parameters(), lr=1e-3, weight_decay=1e-4)
+
+best_val = float("inf")
+patience, wait = 5, 0                              # early-stopping patience
+
+for epoch in range(200):
+    # --- train step ---
+    model.train()
+    opt.zero_grad()
+    tr_loss = loss_fn(model(X_tr), y_tr)
+    tr_loss.backward()
+    opt.step()
+
+    # --- validation check (no gradients) ---
+    model.eval()
+    with torch.no_grad():
+        val_loss = loss_fn(model(X_val), y_val).item()
+
+    # The gap between tr_loss and val_loss IS your overfitting signal:
+    # train keeps dropping while val flattens/rises -> overfitting.
+    if val_loss < best_val - 1e-4:
+        best_val, wait = val_loss, 0
+        torch.save(model.state_dict(), "best.pt")  # keep the best-generalizing model
+    else:
+        wait += 1
+        if wait >= patience:                       # val stopped improving -> stop
+            print(f"Early stop at epoch {epoch}, best val {best_val:.4f}")
+            break
+
+# Load the checkpoint from BEFORE it started overfitting.
+model.load_state_dict(torch.load("best.pt"))
+</code></pre>
+    </div>
+
+    <div class="callout">
+      <div class="callout__title">The habit to build</div>
+      Always plot train vs validation together. One curve tells you nothing; the <strong>gap between
+      them</strong> is the single most informative picture in applied ML — it tells you to add capacity,
+      add regularization, or stop.
+    </div>
+
+    <nav class="pagenav" id="pageNav" aria-label="Page navigation"></nav>
+    <div class="sitefoot">cb-ml · Part 3 · Train · Tune · Optimize · Evaluate</div>
+  </main>
+</body>
+</html>
