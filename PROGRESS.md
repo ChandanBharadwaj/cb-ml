@@ -31,7 +31,7 @@ Legend: `[ ]` todo · `[~]` in progress · `[x]` done
 - [x] `p2-prompt-engineering.html` — few-shot, CoT/ReAct, structured output, injection defense
 - [x] `p2-rag.html` — chunking, hybrid search, re-ranking, eval, failure modes
 - [x] `p2-vector-db-embeddings.html` — similarity metrics, ANN (HNSW/IVF), hybrid + metadata
-- [ ] `p2-agents.html` — ReAct loop, function calling, memory, MCP, agent eval
+- [x] `p2-agents.html` — ReAct loop, function calling, memory, MCP, agent eval
 
 ## Part 3 · Train · Tune · Optimize · Evaluate
 - [ ] `p3-fine-tuning.html` — LoRA/QLoRA, RLHF/DPO/GRPO, fine-tune vs RAG vs prompt

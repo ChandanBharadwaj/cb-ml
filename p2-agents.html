@@ -1,0 +1,352 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Agents &amp; Tool Use · cb-ml</title>
+  <meta name="description" content="How LLMs take actions: the ReAct loop, tool use / function calling, memory, multi-agent systems, MCP, and agent evaluation — with a commented tool-calling agent loop.">
+  <script>(function(){try{var t=localStorage.getItem('cbml-theme');if(t)document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+  <link rel="stylesheet" href="assets/styles.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+  <script defer src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+  <script defer src="assets/app.js"></script>
+</head>
+<body>
+  <a class="skip" href="#main">Skip to content</a>
+
+  <header class="topbar">
+    <button id="menuBtn" class="iconbtn" aria-label="Open navigation" aria-expanded="false">☰</button>
+    <a class="topbar__brand" href="index.html"><span class="logo">ml</span> cb-ml</a>
+    <span class="topbar__spacer"></span>
+    <button id="themeBtn" class="iconbtn" aria-label="Toggle theme">☾</button>
+  </header>
+
+  <aside id="drawer" class="drawer" aria-label="Site navigation">
+    <div class="drawer__head">
+      <span class="logo">ml</span>
+      <div><div class="drawer__title">cb-ml</div><div class="drawer__sub">AI/ML · GenAI interview prep</div></div>
+    </div>
+    <nav id="drawerNav"></nav>
+  </aside>
+  <div id="scrim" class="scrim"></div>
+
+  <main id="main">
+    <span class="eyebrow">Part 2 · Building with LLMs</span>
+    <h1>Agents &amp; Tool Use</h1>
+    <p class="lede">
+      An LLM on its own can only produce text. An <strong>agent</strong> wraps it in a loop and gives it
+      <strong>tools</strong> — search, a database, an API, code execution — so it can <em>take actions</em>,
+      observe the results, and decide what to do next. This is the frontier of “building with LLMs,” and
+      where an FDE spends real time: turning a chat model into something that gets work done.
+    </p>
+
+    <div class="callout ladder">
+      <div class="callout__title">Where this sits on the ladder</div>
+      <strong>The top of rung 4 — the most powerful and the most expensive.</strong> Agents make
+      <em>many</em> LLM calls per task (each loop step is a call), so cost, latency, and failure risk
+      multiply. Use one only when the task genuinely needs multi-step reasoning + tools. For a single
+      known step, a plain LLM call or a workflow beats an agent.
+      <div class="chips">
+        <span class="chip gpu">many LLM calls</span>
+        <span class="chip cost">highest $ / latency</span>
+        <span class="chip">multi-step + tools</span>
+      </div>
+    </div>
+
+    <nav class="toc" aria-label="On this page">
+      <div class="toc__title">On this page</div>
+      <ol>
+        <li><a href="#loop">The agent loop (ReAct)</a></li>
+        <li><a href="#tools">Tool use / function calling</a></li>
+        <li><a href="#memory">Memory</a></li>
+        <li><a href="#patterns">Patterns &amp; multi-agent</a></li>
+        <li><a href="#mcp">MCP — the tool standard</a></li>
+        <li><a href="#eval">Evaluation &amp; guardrails</a></li>
+        <li><a href="#qa">Interview Q&amp;A</a></li>
+        <li><a href="#code">Code: a tool-calling loop</a></li>
+      </ol>
+    </nav>
+
+    <!-- ===== Loop ===== -->
+    <h2 id="loop">The agent loop (ReAct)</h2>
+    <p>
+      The dominant pattern is <strong>ReAct</strong> — <em>Reason + Act</em>. The model alternates
+      between <strong>thinking</strong>, <strong>acting</strong> (calling a tool), and
+      <strong>observing</strong> the result, repeating until it has enough to answer. That loop is the
+      whole trick: tools give it fresh, real-world information, and the loop lets it chain steps.
+    </p>
+
+    <div class="figure">
+      <svg viewBox="0 0 380 250" role="img" aria-label="The ReAct agent loop: think, act with a tool, observe, repeat, then answer">
+        <defs><marker id="ag" markerWidth="9" markerHeight="9" refX="5" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#7c8cff"/></marker></defs>
+        <!-- circular loop of 3 nodes -->
+        <g font-family="monospace" font-size="12" text-anchor="middle">
+          <circle cx="190" cy="50"  r="34" fill="var(--accent-soft,#2b2f55)" stroke="#7c8cff" stroke-width="2" class="anim-pulse"/>
+          <text x="190" y="47" fill="#7c8cff" font-weight="700">Think</text>
+          <text x="190" y="62" fill="var(--text-muted,#9aa7b8)" font-size="9">reason</text>
+
+          <circle cx="300" cy="150" r="34" fill="var(--accent-soft,#2b2f55)" stroke="#38bdf8" stroke-width="2" class="anim-pulse" style="animation-delay:.3s"/>
+          <text x="300" y="147" fill="#38bdf8" font-weight="700">Act</text>
+          <text x="300" y="162" fill="var(--text-muted,#9aa7b8)" font-size="9">call tool</text>
+
+          <circle cx="80"  cy="150" r="34" fill="var(--accent-soft,#2b2f55)" stroke="#3fb950" stroke-width="2" class="anim-pulse" style="animation-delay:.6s"/>
+          <text x="80" y="147" fill="#3fb950" font-weight="700">Observe</text>
+          <text x="80" y="162" fill="var(--text-muted,#9aa7b8)" font-size="9">tool result</text>
+        </g>
+        <!-- arrows around the loop -->
+        <g stroke="#7c8cff" stroke-width="2" fill="none" class="anim-flow">
+          <path d="M222,72 C260,95 280,115 292,122" marker-end="url(#ag)"/>
+          <path d="M268,175 C210,205 150,205 112,178" marker-end="url(#ag)"/>
+          <path d="M92,120 C110,90 140,72 156,64" marker-end="url(#ag)"/>
+        </g>
+        <!-- exit to answer -->
+        <text x="190" y="150" text-anchor="middle" font-size="10" fill="var(--text-muted,#9aa7b8)">loop until</text>
+        <text x="190" y="163" text-anchor="middle" font-size="10" fill="var(--text-muted,#9aa7b8)">done</text>
+        <rect x="140" y="205" width="100" height="30" rx="8" fill="var(--surface-2,#1c2333)" stroke="#3fb950"/>
+        <text x="190" y="225" text-anchor="middle" font-size="11" fill="#3fb950" font-family="monospace">final answer</text>
+        <path d="M190,192 L190,204" stroke="#3fb950" stroke-width="2" marker-end="url(#ag)"/>
+      </svg>
+      <div class="figure__cap">Think → Act → Observe, repeat. Each Act is a tool call; each Observe feeds the result back so the next Think is better informed. The model itself decides when it’s done.</div>
+    </div>
+
+    <!-- ===== Tools ===== -->
+    <h2 id="tools">Tool use / function calling</h2>
+    <p>
+      A <strong>tool</strong> is just a function you expose to the model with a name, a description, and a
+      JSON schema of arguments. The model doesn’t run code — it <em>emits a structured request</em>
+      (“call <code>get_weather(city='Paris')</code>”). <strong>Your code</strong> executes it and feeds
+      the result back. This is the safety boundary and the source of the agent’s power.
+    </p>
+    <div class="callout warn">
+      <div class="callout__title">Critical mental model</div>
+      The model only <em>proposes</em> a call; your code <em>decides</em> whether and how to run it. Never
+      wire a raw model request straight into a dangerous action (delete, pay, email) without validation
+      and permissions — this is exactly where prompt injection turns into real damage. Least privilege on
+      every tool.
+    </div>
+
+    <!-- ===== Memory ===== -->
+    <h2 id="memory">Memory</h2>
+    <p>
+      The model is stateless between calls, so agents bolt on memory:
+    </p>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>Type</th><th>What</th><th>How it’s stored</th></tr></thead>
+        <tbody>
+          <tr><td><strong>Short-term</strong></td><td>The current conversation / scratchpad</td><td>In the context window (bounded)</td></tr>
+          <tr><td><strong>Long-term</strong></td><td>Facts, preferences, past sessions</td><td>A vector DB, retrieved when relevant (RAG!)</td></tr>
+          <tr><td><strong>Episodic</strong></td><td>Records of past tasks/actions to learn from</td><td>A log/store, summarized back into context</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="callout deeper">
+      <div class="callout__title">Long-term memory <em>is</em> RAG</div>
+      “How does an agent remember across sessions?” — you retrieve relevant past facts from a vector store
+      and inject them into the context. Memory and retrieval are the same machinery; that connection is a
+      strong interview answer.
+    </div>
+
+    <!-- ===== Patterns ===== -->
+    <h2 id="patterns">Patterns &amp; multi-agent</h2>
+    <ul>
+      <li><strong>ReAct</strong> — interleave reasoning and tool calls (the default single agent).</li>
+      <li><strong>Plan-and-execute</strong> — make a full plan up front, then execute steps; cheaper and
+        more controllable for well-structured tasks.</li>
+      <li><strong>Reflection</strong> — the agent critiques its own output and retries; improves quality
+        at the cost of more calls.</li>
+      <li><strong>Multi-agent</strong> — specialized agents (planner, coder, reviewer) coordinated by an
+        orchestrator. Powerful for complex work, but more moving parts, cost, and failure surface.</li>
+    </ul>
+    <div class="callout warn">
+      <div class="callout__title">FDE judgment</div>
+      Multi-agent looks impressive and is often overkill. Every added agent multiplies latency, cost, and
+      the chance of a derailed loop. Reach for the simplest thing that works: one good agent with the
+      right tools beats an orchestra you can’t debug.
+    </div>
+
+    <!-- ===== MCP ===== -->
+    <h2 id="mcp">MCP — the tool standard</h2>
+    <p>
+      The <strong>Model Context Protocol (MCP)</strong> is an open standard for connecting models to tools
+      and data sources through a common interface — think “USB-C for AI tools.” Instead of hand-writing a
+      bespoke integration per model and per tool, a tool exposes an MCP server once and any MCP-aware
+      client can use it. For an FDE wiring an LLM into a customer’s systems, that’s a big deal:
+      standardized, reusable connectors instead of one-off glue.
+    </p>
+
+    <!-- ===== Eval ===== -->
+    <h2 id="eval">Evaluation &amp; guardrails</h2>
+    <p>
+      Agents are <em>hard</em> to evaluate and operate — errors compound across steps, and a loop can run
+      away. What to put in place:
+    </p>
+    <ul>
+      <li><strong>Trajectory eval</strong> — judge not just the final answer but whether each step
+        (tool choice, arguments) was correct. A right answer via a lucky wrong path is fragile.</li>
+      <li><strong>Guardrails</strong> — max-step / max-cost limits to stop runaway loops, tool
+        allow-lists, output validation, human-in-the-loop approval for risky actions.</li>
+      <li><strong>Observability</strong> — trace every think/act/observe step (LangSmith, etc.); you
+        cannot debug an agent you can’t see.</li>
+      <li><strong>Least privilege</strong> — scope each tool’s permissions tightly; assume the model
+        can be manipulated (prompt injection) and design so the blast radius is small.</li>
+    </ul>
+
+    <!-- ===== Q&A ===== -->
+    <h2 id="qa">Interview Q&amp;A</h2>
+
+    <details class="qa">
+      <summary class="qa__q"><span class="badge core">core</span>What is an LLM agent, and how is it different from a plain LLM call?</summary>
+      <div class="qa__a">
+        <p>
+          A plain call maps a prompt to text in one shot. An agent puts the LLM in a loop with tools: it
+          reasons, chooses an action (a tool call), observes the result, and repeats until it can answer —
+          the ReAct pattern. That lets it fetch live data, take multi-step actions, and self-correct.
+          The cost is that it makes many calls per task, so it’s slower, pricier, and harder to make
+          reliable — use it only when the task truly needs multi-step tool use.
+        </p>
+      </div>
+    </details>
+
+    <details class="qa">
+      <summary class="qa__q"><span class="badge core">core</span>How does function calling actually work?</summary>
+      <div class="qa__a">
+        <p>
+          You give the model tool definitions (name, description, JSON argument schema). When it decides a
+          tool is needed, it returns a structured call — the tool name and arguments — instead of prose.
+          Your application executes that function, appends the result to the conversation, and calls the
+          model again so it can use the result. The model never runs code itself; it only requests calls,
+          and your code stays in control of execution.
+        </p>
+      </div>
+    </details>
+
+    <details class="qa">
+      <summary class="qa__q"><span class="badge senior">senior</span>How do you give an agent long-term memory?</summary>
+      <div class="qa__a">
+        <p>
+          Short-term memory is just the context window (the running conversation). For long-term memory you
+          store facts, summaries, and past interactions in a vector database and retrieve the relevant ones
+          into the prompt when needed — i.e. it’s RAG applied to the agent’s own history. Episodic memory
+          (records of past tasks) works the same way. The key point: the model is stateless, so “memory” is
+          always external storage plus retrieval, not something inside the model.
+        </p>
+      </div>
+    </details>
+
+    <details class="qa">
+      <summary class="qa__q"><span class="badge trap">trap</span>When would you NOT use an agent?</summary>
+      <div class="qa__a">
+        <p>
+          When the task is a fixed, known sequence of steps — then a deterministic workflow (or a single
+          structured LLM call) is cheaper, faster, and far more reliable than letting a model decide the
+          path each time. Agents shine when the steps are dynamic and unknown up front. Reaching for a
+          multi-agent system when a simple pipeline would do is a common over-engineering trap: more
+          agents means more cost, latency, and ways to fail.
+        </p>
+      </div>
+    </details>
+
+    <details class="qa">
+      <summary class="qa__q"><span class="badge senior">senior</span>How do you keep an agent safe and prevent runaway loops?</summary>
+      <div class="qa__a">
+        <p>
+          Layered controls: hard limits on steps and total cost/tokens per task to stop infinite loops;
+          least-privilege, allow-listed tools so the model can’t take dangerous actions; validation of every
+          tool call’s arguments before execution; human-in-the-loop approval for irreversible operations
+          (payments, deletes, external emails); and full tracing/observability so you can see and debug the
+          trajectory. Underlying principle: treat the model as untrusted and keep execution authority in
+          your code.
+        </p>
+      </div>
+    </details>
+
+    <details class="qa">
+      <summary class="qa__q"><span class="badge core">core</span>What is MCP and why does it matter?</summary>
+      <div class="qa__a">
+        <p>
+          The Model Context Protocol is an open standard for exposing tools and data sources to LLMs through
+          a uniform interface — a tool implements an MCP server once and any MCP-compatible client can use
+          it, instead of building custom integrations per model/tool. It matters because it makes tool
+          integrations reusable and portable, which is exactly what you want when connecting an LLM to a
+          customer’s existing systems.
+        </p>
+      </div>
+    </details>
+
+    <!-- ===== Code ===== -->
+    <h2 id="code">Code: a tool-calling agent loop</h2>
+    <p>
+      The ReAct loop in ~40 lines: define a tool, let the model request it, execute it, feed the result
+      back, repeat until it answers. Every real agent framework (LangGraph, etc.) is a more elaborate
+      version of exactly this.
+    </p>
+
+    <div class="codewrap">
+      <div class="codewrap__bar"><span class="codewrap__lang">python</span><span>a minimal ReAct tool-calling loop</span><button class="copybtn" type="button">Copy</button></div>
+<pre><code class="language-python"># A minimal agent: the model can call a tool, we run it, feed the result back, repeat.
+# pip install openai
+from openai import OpenAI
+import json
+
+client = OpenAI()
+
+# 1) The actual tool — plain Python your code controls.
+def get_weather(city: str) -> str:
+    fake = {"Paris": "18C, cloudy", "Tokyo": "26C, clear"}
+    return fake.get(city, "unknown")
+
+# 2) Describe the tool to the model as a JSON schema (name + args it may request).
+tools = [{
+    "type": "function",
+    "function": {
+        "name": "get_weather",
+        "description": "Get current weather for a city.",
+        "parameters": {
+            "type": "object",
+            "properties": {"city": {"type": "string"}},
+            "required": ["city"],
+        },
+    },
+}]
+
+messages = [{"role": "user", "content": "Should I take an umbrella in Paris?"}]
+
+# 3) THE AGENT LOOP: think -> (maybe) act -> observe -> repeat, capped for safety.
+for step in range(5):                       # max-steps guard against runaway loops
+    resp = client.chat.completions.create(
+        model="gpt-4o-mini", messages=messages, tools=tools,
+    )
+    msg = resp.choices[0].message
+    messages.append(msg)                    # keep the running conversation (memory)
+
+    if not msg.tool_calls:                  # no tool requested -> the model is done
+        print("ANSWER:", msg.content)
+        break
+
+    # 4) The model ACTED: execute each requested tool and OBSERVE the result.
+    for call in msg.tool_calls:
+        args = json.loads(call.function.arguments)      # model-proposed arguments
+        # NOTE: in production, VALIDATE args and permissions before executing.
+        result = get_weather(**args)                    # your code runs the tool
+        messages.append({                               # feed the observation back
+            "role": "tool",
+            "tool_call_id": call.id,
+            "content": result,
+        })
+    # loop continues: the model now sees the tool result and reasons again.
+</code></pre>
+    </div>
+
+    <div class="callout">
+      <div class="callout__title">The pattern to remember</div>
+      An agent = <strong>LLM + tools + a loop + memory + guardrails</strong>. Frameworks add ergonomics,
+      but if you can write this loop and explain where validation and step-limits go, you understand
+      agents better than most.
+    </div>
+
+    <nav class="pagenav" id="pageNav" aria-label="Page navigation"></nav>
+    <div class="sitefoot">cb-ml · Part 2 · Building with LLMs</div>
+  </main>
+</body>
+</html>
