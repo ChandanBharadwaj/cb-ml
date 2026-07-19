@@ -1,0 +1,399 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>RAG · cb-ml</title>
+  <meta name="description" content="Retrieval-Augmented Generation end to end: chunking, embeddings, hybrid search, re-ranking, evaluation, and the failure modes that actually break RAG in production — with commented code.">
+  <script>(function(){try{var t=localStorage.getItem('cbml-theme');if(t)document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+  <link rel="stylesheet" href="assets/styles.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+  <script defer src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+  <script defer src="assets/app.js"></script>
+</head>
+<body>
+  <a class="skip" href="#main">Skip to content</a>
+
+  <header class="topbar">
+    <button id="menuBtn" class="iconbtn" aria-label="Open navigation" aria-expanded="false">☰</button>
+    <a class="topbar__brand" href="index.html"><span class="logo">ml</span> cb-ml</a>
+    <span class="topbar__spacer"></span>
+    <button id="themeBtn" class="iconbtn" aria-label="Toggle theme">☾</button>
+  </header>
+
+  <aside id="drawer" class="drawer" aria-label="Site navigation">
+    <div class="drawer__head">
+      <span class="logo">ml</span>
+      <div><div class="drawer__title">cb-ml</div><div class="drawer__sub">AI/ML · GenAI interview prep</div></div>
+    </div>
+    <nav id="drawerNav"></nav>
+  </aside>
+  <div id="scrim" class="scrim"></div>
+
+  <main id="main">
+    <span class="eyebrow">Part 2 · Building with LLMs</span>
+    <h1>RAG — Retrieval-Augmented Generation</h1>
+    <p class="lede">
+      The most-tested GenAI topic in modern interviews, and the workhorse of real deployments. RAG
+      gives an LLM an <strong>open book</strong>: instead of answering from memory (and hallucinating),
+      it retrieves your relevant documents at query time and answers <em>from them</em>. This is how you
+      put a model on top of private, fresh, or proprietary data without training it.
+    </p>
+
+    <div class="callout ladder">
+      <div class="callout__title">Where this sits on the ladder</div>
+      <strong>The middle LLM lever: prompt → <u>RAG</u> → fine-tune.</strong> Reach for RAG when the
+      problem is “the model doesn’t <em>know</em> our stuff” — internal docs, changing data, facts that
+      must be cited. It adds knowledge without changing weights, so it’s far cheaper and more
+      maintainable than fine-tuning, and updates instantly when your data changes.
+      <div class="chips">
+        <span class="chip cpu">retrieval on CPU</span>
+        <span class="chip gpu">LLM for generation</span>
+        <span class="chip cost">no training</span>
+      </div>
+    </div>
+
+    <nav class="toc" aria-label="On this page">
+      <div class="toc__title">On this page</div>
+      <ol>
+        <li><a href="#why">Why RAG instead of fine-tuning</a></li>
+        <li><a href="#pipeline">The pipeline, end to end</a></li>
+        <li><a href="#chunking">Chunking strategies</a></li>
+        <li><a href="#search">Hybrid search &amp; re-ranking</a></li>
+        <li><a href="#advanced">Agentic RAG, Self-RAG, GraphRAG</a></li>
+        <li><a href="#failures">Failure modes</a></li>
+        <li><a href="#eval">Evaluating RAG</a></li>
+        <li><a href="#qa">Interview Q&amp;A</a></li>
+        <li><a href="#code">Code: a minimal RAG pipeline</a></li>
+      </ol>
+    </nav>
+
+    <!-- ===== Why ===== -->
+    <h2 id="why">Why RAG instead of fine-tuning</h2>
+    <p>
+      A common trap is “our LLM doesn’t know our docs, so let’s fine-tune it.” Usually wrong.
+      Fine-tuning teaches <em>behavior and style</em>; it’s a poor way to inject <em>facts</em> —
+      they’re expensive to bake in, go stale, can’t be cited, and are hard to update. RAG injects
+      facts at query time: change a document, and the next answer reflects it.
+    </p>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th></th><th>RAG</th><th>Fine-tuning</th></tr></thead>
+        <tbody>
+          <tr><td>Best for</td><td>Facts, knowledge, fresh/private data</td><td>Behavior, format, tone, a skill</td></tr>
+          <tr><td>Update cost</td><td>Instant — re-index a doc</td><td>Re-train the model</td></tr>
+          <tr><td>Citations</td><td>Yes — you know the source</td><td>No — knowledge is opaque in weights</td></tr>
+          <tr><td>Setup cost</td><td>Low (no GPU training)</td><td>High (data + training)</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="callout deeper">
+      <div class="callout__title">The line to say</div>
+      “RAG for knowledge, fine-tuning for behavior — and they compose. If the model needs to <em>know</em>
+      our data, that’s retrieval; if it needs to <em>act or sound</em> a certain way, that’s fine-tuning.”
+    </div>
+
+    <!-- ===== Pipeline ===== -->
+    <h2 id="pipeline">The pipeline, end to end</h2>
+    <p>
+      RAG is two phases: an offline <strong>indexing</strong> phase (done once / on updates) and an
+      online <strong>query</strong> phase (per request).
+    </p>
+
+    <div class="figure">
+      <svg viewBox="0 0 460 250" role="img" aria-label="RAG pipeline: documents are chunked and embedded into a vector store; a query is embedded, retrieved, re-ranked, and answered by the LLM">
+        <defs><marker id="rg" markerWidth="9" markerHeight="9" refX="5" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#38bdf8"/></marker></defs>
+
+        <!-- Indexing row -->
+        <text x="14" y="26" font-size="10" fill="var(--text-muted,#9aa7b8)">INDEX (offline)</text>
+        <g font-family="monospace" font-size="10" text-anchor="middle">
+          <rect x="14"  y="34" width="76" height="30" rx="7" fill="var(--surface-2,#1c2333)" stroke="var(--border,#3a4457)"/><text x="52" y="53" fill="var(--text,#e6edf3)">documents</text>
+          <rect x="110" y="34" width="70" height="30" rx="7" fill="var(--surface-2,#1c2333)" stroke="var(--border,#3a4457)"/><text x="145" y="53" fill="var(--text,#e6edf3)">chunk</text>
+          <rect x="200" y="34" width="70" height="30" rx="7" fill="var(--accent-soft,#2b2f55)" stroke="#7c8cff"/><text x="235" y="53" fill="#7c8cff">embed</text>
+          <rect x="290" y="34" width="90" height="30" rx="7" fill="var(--accent-soft,#2b2f55)" stroke="#7c8cff"/><text x="335" y="53" fill="#7c8cff">vector store</text>
+        </g>
+        <g stroke="#38bdf8" fill="none" class="anim-flow">
+          <line x1="90" y1="49" x2="108" y2="49" marker-end="url(#rg)"/>
+          <line x1="180" y1="49" x2="198" y2="49" marker-end="url(#rg)"/>
+          <line x1="270" y1="49" x2="288" y2="49" marker-end="url(#rg)"/>
+        </g>
+
+        <!-- Query row -->
+        <text x="14" y="110" font-size="10" fill="var(--text-muted,#9aa7b8)">QUERY (per request)</text>
+        <g font-family="monospace" font-size="10" text-anchor="middle">
+          <rect x="14"  y="120" width="70" height="30" rx="7" fill="var(--surface-2,#1c2333)" stroke="var(--border,#3a4457)"/><text x="49" y="139" fill="var(--text,#e6edf3)">question</text>
+          <rect x="104" y="120" width="66" height="30" rx="7" fill="var(--accent-soft,#2b2f55)" stroke="#7c8cff"/><text x="137" y="139" fill="#7c8cff">embed</text>
+          <rect x="190" y="120" width="86" height="30" rx="7" fill="var(--surface-2,#1c2333)" stroke="#38bdf8"/><text x="233" y="139" fill="#38bdf8">retrieve top-k</text>
+          <rect x="296" y="120" width="70" height="30" rx="7" fill="var(--surface-2,#1c2333)" stroke="#38bdf8"/><text x="331" y="139" fill="#38bdf8">re-rank</text>
+        </g>
+        <g stroke="#38bdf8" fill="none" class="anim-flow">
+          <line x1="84"  y1="135" x2="102" y2="135" marker-end="url(#rg)"/>
+          <line x1="170" y1="135" x2="188" y2="135" marker-end="url(#rg)"/>
+          <line x1="276" y1="135" x2="294" y2="135" marker-end="url(#rg)"/>
+          <!-- vector store feeds retrieval -->
+          <path d="M335,64 C335,90 233,95 233,118" stroke-dasharray="4 4" marker-end="url(#rg)"/>
+        </g>
+
+        <!-- Generation -->
+        <g font-family="monospace" font-size="10" text-anchor="middle">
+          <rect x="120" y="188" width="150" height="34" rx="8" fill="var(--accent-soft,#2b2f55)" stroke="#7c8cff" class="anim-pulse"/><text x="195" y="209" fill="#7c8cff" font-weight="700">LLM (context + question)</text>
+          <rect x="300" y="190" width="80" height="30" rx="7" fill="var(--surface-2,#1c2333)" stroke="#3fb950"/><text x="340" y="209" fill="#3fb950">grounded answer</text>
+        </g>
+        <g stroke="#38bdf8" fill="none" class="anim-flow">
+          <path d="M331,150 C331,168 250,172 220,186" marker-end="url(#rg)"/>
+          <line x1="270" y1="205" x2="298" y2="205" marker-end="url(#rg)"/>
+        </g>
+      </svg>
+      <div class="figure__cap">Index once: split docs → embed → store. Per query: embed the question → retrieve nearest chunks → re-rank → hand the best ones + the question to the LLM → answer grounded in your data.</div>
+    </div>
+
+    <!-- ===== Chunking ===== -->
+    <h2 id="chunking">Chunking strategies</h2>
+    <p>
+      You don’t embed whole documents — you split them into <strong>chunks</strong>. Chunking is the
+      most under-rated lever in RAG: get it wrong and retrieval fails no matter how good your model is.
+    </p>
+    <ul>
+      <li><strong>Fixed-size</strong> (e.g. 300–500 tokens) with <strong>overlap</strong> (10–20%) so a
+        sentence split across a boundary still appears whole in one chunk. Simple, strong default.</li>
+      <li><strong>Semantic / recursive</strong> — split on structure (headings, paragraphs) so a chunk
+        is a coherent idea, not an arbitrary window.</li>
+      <li><strong>Too big</strong> → chunks contain lots of irrelevant text, diluting the match and
+        wasting context. <strong>Too small</strong> → chunks lose the surrounding meaning. Tune to your
+        docs.</li>
+    </ul>
+    <div class="callout warn">
+      <div class="callout__title">FDE gotcha</div>
+      Chunk size trades recall against precision and directly drives token cost. It’s the first knob to
+      tune when RAG “doesn’t work” — usually before touching the model or the prompt.
+    </div>
+
+    <!-- ===== Search ===== -->
+    <h2 id="search">Hybrid search &amp; re-ranking</h2>
+    <p>
+      Two retrieval signals, better together:
+    </p>
+    <ul>
+      <li><strong>Dense (semantic)</strong> — embedding similarity. Finds meaning even when words differ
+        (“car” ↔ “automobile”). Weak on exact terms, IDs, rare keywords.</li>
+      <li><strong>Sparse (lexical, BM25)</strong> — keyword match. Nails exact terms, codes, names.
+        Blind to synonyms.</li>
+      <li><strong>Hybrid</strong> — combine both scores (e.g. reciprocal rank fusion). The production
+        default, because real queries need both.</li>
+    </ul>
+    <p>
+      Then <strong>re-rank</strong>: retrieve a generous top-k (say 20) cheaply, and use a
+      <strong>cross-encoder re-ranker</strong> to score each candidate against the query jointly and
+      keep the best 3–5. Retrieval is recall-oriented and fast; re-ranking is precision-oriented and
+      accurate. Together they beat either alone.
+    </p>
+
+    <!-- ===== Advanced ===== -->
+    <h2 id="advanced">Agentic RAG, Self-RAG, GraphRAG</h2>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>Variant</th><th>Idea</th><th>When it helps</th></tr></thead>
+        <tbody>
+          <tr><td><strong>Agentic RAG</strong></td><td>An agent decides <em>whether</em> and <em>what</em> to retrieve, can query multiple times / sources</td><td>Complex, multi-step questions</td></tr>
+          <tr><td><strong>Self-RAG</strong></td><td>Model critiques its own retrieval &amp; output, retrieves again if unsupported</td><td>Reducing unsupported claims</td></tr>
+          <tr><td><strong>GraphRAG</strong></td><td>Retrieve over a knowledge graph, not just flat chunks</td><td>Multi-hop reasoning, entity relationships</td></tr>
+          <tr><td><strong>HyDE</strong></td><td>Generate a hypothetical answer, embed <em>that</em> to retrieve</td><td>Short/ambiguous queries</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="callout deeper">
+      <div class="callout__title">Don’t over-engineer</div>
+      Basic hybrid-search RAG with good chunking and re-ranking solves the large majority of cases.
+      Reach for agentic/graph variants only when you can point to a failure mode they fix — naming them
+      shows breadth, but knowing <em>when not to</em> shows judgment.
+    </div>
+
+    <!-- ===== Failures ===== -->
+    <h2 id="failures">Failure modes (name these in an interview)</h2>
+    <ul>
+      <li><strong>Lost in the middle</strong> — LLMs attend best to the start and end of context;
+        relevant chunks buried in the middle get ignored. Fix: retrieve fewer, better chunks;
+        re-rank so the best sit first.</li>
+      <li><strong>Retrieval miss</strong> — the answer isn’t in the retrieved chunks at all (bad
+        chunking, wrong embedding, query mismatch). The model then hallucinates or says it can’t find
+        it. This is the #1 cause of “RAG is wrong.”</li>
+      <li><strong>Multi-hop</strong> — the answer requires combining facts from several documents; a
+        single retrieval can’t assemble them. Fix: query decomposition / agentic retrieval.</li>
+      <li><strong>Stale or conflicting sources</strong> — old and new docs disagree; the model may pick
+        the wrong one. Fix: metadata (recency) filtering, deduplication, source priority.</li>
+      <li><strong>Hallucination despite good context</strong> — the answer’s in the chunks but the
+        model ignores it. Fix: instruct “answer only from the context; if absent, say so,” and cite.</li>
+    </ul>
+
+    <!-- ===== Eval ===== -->
+    <h2 id="eval">Evaluating RAG</h2>
+    <p>
+      You can’t improve what you don’t measure, and RAG has two things to measure separately:
+    </p>
+    <ul>
+      <li><strong>Retrieval quality</strong> — did we fetch the right chunks? Metrics: recall@k,
+        precision@k, hit-rate, MRR.</li>
+      <li><strong>Generation quality</strong> — given the chunks, is the answer <em>faithful</em>
+        (grounded, no hallucination) and <em>relevant</em> (answers the question)? Measured with an
+        LLM-as-judge or frameworks like RAGAS.</li>
+    </ul>
+    <div class="callout warn">
+      <div class="callout__title">Debug the right half</div>
+      Always separate the two. If retrieval@k is low, no prompt tweak will help — fix chunking/search.
+      If retrieval is good but answers are wrong, fix the prompt/model. Conflating them wastes days.
+    </div>
+
+    <!-- ===== Q&A ===== -->
+    <h2 id="qa">Interview Q&amp;A</h2>
+
+    <details class="qa">
+      <summary class="qa__q"><span class="badge core">core</span>Walk me through a RAG pipeline.</summary>
+      <div class="qa__a">
+        <p>
+          Offline: split documents into overlapping chunks, embed each with an embedding model, and store
+          the vectors (plus metadata) in a vector index. Per query: embed the question, retrieve the
+          top-k nearest chunks (ideally hybrid dense + keyword), re-rank them with a cross-encoder to
+          keep the best few, then pass those chunks plus the question to the LLM with an instruction to
+          answer only from the provided context and cite sources. The output is grounded in your data
+          and updates the moment you re-index.
+        </p>
+      </div>
+    </details>
+
+    <details class="qa">
+      <summary class="qa__q"><span class="badge core">core</span>RAG or fine-tuning — how do you decide?</summary>
+      <div class="qa__a">
+        <p>
+          RAG for <em>knowledge</em> (facts, private/fresh data, anything needing citations or frequent
+          updates); fine-tuning for <em>behavior</em> (format, tone, a specialized skill). If the answer
+          is “the model doesn’t know our data,” that’s retrieval, not training. They also compose:
+          fine-tune for how to respond, RAG for what to respond with. And per the ladder, try a good
+          prompt first — many “we need to fine-tune” asks are really vague prompts.
+        </p>
+      </div>
+    </details>
+
+    <details class="qa">
+      <summary class="qa__q"><span class="badge trap">trap</span>Your RAG system gives a wrong answer. How do you debug it?</summary>
+      <div class="qa__a">
+        <p>
+          Isolate the stage. First check <em>retrieval</em>: were the correct chunks in the top-k? If not,
+          it’s a retrieval problem — revisit chunk size/overlap, embedding model, or add hybrid search /
+          re-ranking. If the right chunks <em>were</em> retrieved but the answer is still wrong, it’s a
+          <em>generation</em> problem — tighten the prompt (“answer only from context, say ‘not found’
+          otherwise”), lower temperature, or handle lost-in-the-middle by re-ranking best chunks first.
+          Measuring retrieval and generation separately is the whole game.
+        </p>
+      </div>
+    </details>
+
+    <details class="qa">
+      <summary class="qa__q"><span class="badge senior">senior</span>Why hybrid search instead of pure vector similarity?</summary>
+      <div class="qa__a">
+        <p>
+          Dense embeddings capture meaning but are weak on exact tokens — product codes, error IDs, rare
+          names, acronyms. Sparse/BM25 nails those but misses synonyms. Real queries need both, so we run
+          both and fuse the rankings (e.g. reciprocal rank fusion). Pure vector search quietly fails on
+          keyword-heavy queries, which is exactly the kind of bug that shows up only in production.
+        </p>
+      </div>
+    </details>
+
+    <details class="qa">
+      <summary class="qa__q"><span class="badge senior">senior</span>What is “lost in the middle” and how do you mitigate it?</summary>
+      <div class="qa__a">
+        <p>
+          LLMs attend most strongly to the beginning and end of their context, so relevant information
+          placed in the middle of a long context can be effectively ignored. Mitigations: retrieve fewer
+          but higher-quality chunks (don’t stuff 50 in), re-rank so the most relevant are positioned
+          first, and keep the context tight. It’s a strong argument for good retrieval + re-ranking over
+          simply maximizing context length.
+        </p>
+      </div>
+    </details>
+
+    <details class="qa">
+      <summary class="qa__q"><span class="badge trap">trap</span>How do you keep a RAG system from citing outdated policy after a document is updated?</summary>
+      <div class="qa__a">
+        <p>
+          Attach metadata (version, effective date, source) to every chunk and filter/sort on it —
+          prefer the most recent, deduplicate near-identical chunks, and drop superseded versions from the
+          index on update. If old and new coexist, the model may pick either, so make recency an explicit
+          retrieval constraint rather than hoping the model chooses correctly.
+        </p>
+      </div>
+    </details>
+
+    <!-- ===== Code ===== -->
+    <h2 id="code">Code: a minimal RAG pipeline</h2>
+    <p>
+      The whole idea in ~40 lines — embed, cosine-search, ground the answer. No vector-DB dependency so
+      the mechanics are visible; in production you’d swap the numpy search for a real index (see
+      <a href="p2-vector-db-embeddings.html">Vector DBs &amp; Embeddings</a>).
+    </p>
+
+    <div class="codewrap">
+      <div class="codewrap__bar"><span class="codewrap__lang">python</span><span>minimal RAG: embed → retrieve → grounded answer</span><button class="copybtn" type="button">Copy</button></div>
+<pre><code class="language-python"># Minimal RAG, from scratch, so every stage is visible.
+# pip install sentence-transformers numpy openai
+from sentence_transformers import SentenceTransformer
+import numpy as np
+from openai import OpenAI
+
+# ---- INDEX (offline): chunk -> embed -> store -----------------------------
+# In reality these come from splitting your documents into overlapping chunks.
+chunks = [
+    "The Acme Pro plan costs $49/month and includes 10 seats.",
+    "Refunds are available within 30 days of purchase.",
+    "The Acme Free plan includes 1 seat and community support only.",
+    "Enterprise pricing is custom; contact sales for a quote.",
+]
+
+embedder = SentenceTransformer("all-MiniLM-L6-v2")     # small, CPU-friendly encoder
+chunk_vecs = embedder.encode(chunks, normalize_embeddings=True)  # (n_chunks, dim)
+
+def retrieve(query: str, k: int = 2):
+    """Embed the query and return the k most similar chunks by cosine similarity."""
+    q = embedder.encode([query], normalize_embeddings=True)[0]     # (dim,)
+    # Vectors are normalized, so a dot product IS cosine similarity.
+    scores = chunk_vecs @ q                                        # (n_chunks,)
+    top = np.argsort(scores)[::-1][:k]                             # indices of best k
+    return [chunks[i] for i in top]
+
+# ---- QUERY (online): retrieve -> ground the LLM ---------------------------
+client = OpenAI()
+
+def answer(query: str) -> str:
+    context = retrieve(query)                                      # the "open book"
+    context_block = "\n".join(f"- {c}" for c in context)
+    # The instruction is the anti-hallucination guardrail: answer ONLY from context.
+    prompt = (
+        "Answer the question using ONLY the context below. "
+        "If the answer is not in the context, say 'I don't know.'\n\n"
+        f"Context:\n{context_block}\n\nQuestion: {query}"
+    )
+    resp = client.chat.completions.create(
+        model="gpt-4o-mini",
+        temperature=0,                                            # factual -> deterministic
+        messages=[{"role": "user", "content": prompt}],
+    )
+    return resp.choices[0].message.content
+
+print(answer("How much is the Pro plan?"))     # grounded: "$49/month, 10 seats."
+print(answer("Do you offer a free trial?"))    # not in context -> "I don't know."
+</code></pre>
+    </div>
+
+    <div class="callout">
+      <div class="callout__title">Connect it to what you know</div>
+      The indexing phase is a familiar batch/ETL job — read docs, transform (chunk), compute a feature
+      (embedding), load into a store — the kind of thing you’d run on Databricks/Spark. The query phase
+      is a low-latency service call. RAG is 80% data engineering you already know, plus one embedding
+      step and one LLM call.
+    </div>
+
+    <nav class="pagenav" id="pageNav" aria-label="Page navigation"></nav>
+    <div class="sitefoot">cb-ml · Part 2 · Building with LLMs</div>
+  </main>
+</body>
+</html>

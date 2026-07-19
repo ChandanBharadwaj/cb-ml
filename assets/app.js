@@ -31,7 +31,7 @@ window.CBML_NAV = [
       { href: "p2-prompt-engineering.html", title: "Prompt Engineering",
         desc: "Few-shot, CoT/ReAct, structured output, and prompt-injection defence." },
       { href: "p2-rag.html", title: "RAG",
-        desc: "Chunking, hybrid search, re-ranking, evaluation, and the real failure modes.", soon: true },
+        desc: "Chunking, hybrid search, re-ranking, evaluation, and the real failure modes." },
       { href: "p2-vector-db-embeddings.html", title: "Vector DBs & Embeddings",
         desc: "Similarity metrics, ANN indexes (HNSW/IVF), hybrid + metadata filtering.", soon: true },
       { href: "p2-agents.html", title: "Agents & Tool Use",
